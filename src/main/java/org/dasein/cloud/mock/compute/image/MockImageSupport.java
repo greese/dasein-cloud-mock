@@ -29,6 +29,7 @@ import org.dasein.cloud.compute.MachineImageState;
 import org.dasein.cloud.compute.MachineImageSupport;
 import org.dasein.cloud.compute.MachineImageType;
 import org.dasein.cloud.compute.Platform;
+import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
 
 import javax.annotation.Nonnull;
@@ -41,6 +42,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
 
 /**
  * Implements mocked up image management services for the Dasein Cloud mock cloud.
@@ -52,7 +55,52 @@ import java.util.Map;
 public class MockImageSupport implements MachineImageSupport {
     private CloudProvider provider;
 
+    static private final Map<String,Map<String,Collection<MachineImage>>> customImages = new HashMap<String, Map<String, Collection<MachineImage>>>();
     static private final Map<String,Map<String,Collection<MachineImage>>> publicImages = new HashMap<String, Map<String, Collection<MachineImage>>>();
+    static private final Random random = new Random();
+
+    static private void addCustomImage(@Nonnull String endpoint, @Nonnull String regionId, @Nonnull MachineImage img) {
+        synchronized( customImages ) {
+            Map<String,Collection<MachineImage>> cloud = customImages.get(endpoint);
+
+            if( cloud == null ) {
+                cloud = new HashMap<String, Collection<MachineImage>>();
+                customImages.put(endpoint, cloud);
+            }
+            Collection<MachineImage> images = cloud.get(regionId);
+
+            if( images == null ) {
+                images = new ArrayList<MachineImage>();
+                cloud.put(regionId, images);
+            }
+            images.add(img);
+        }
+    }
+
+    static private @Nonnull Collection<MachineImage> getCustomImages(@Nonnull ProviderContext ctx) {
+        synchronized( customImages ) {
+            Map<String,Collection<MachineImage>> cloud = customImages.get(ctx.getEndpoint());
+
+            if( cloud == null ) {
+                cloud = new HashMap<String, Collection<MachineImage>>();
+                customImages.put(ctx.getEndpoint(), cloud);
+            }
+            Collection<MachineImage> images = cloud.get(ctx.getRegionId());
+
+            if( images == null ) {
+                images = new ArrayList<MachineImage>();
+                cloud.put(ctx.getRegionId(), images);
+            }
+            ArrayList<MachineImage> custom = new ArrayList<MachineImage>();
+
+            for( MachineImage img : images ) {
+                if( img.getProviderOwnerId() != null && img.getProviderOwnerId().equals(ctx.getAccountNumber()) ) {
+                    custom.add(img);
+                }
+            }
+            return custom;
+        }
+    }
 
     static private @Nonnull Collection<MachineImage> getPublicImages(@Nonnull ProviderContext ctx) {
         synchronized( publicImages ) {
@@ -112,7 +160,18 @@ public class MockImageSupport implements MachineImageSupport {
 
     @Override
     public MachineImage getMachineImage(@Nonnull String machineImageId) throws CloudException, InternalException {
-        for( MachineImage img : searchMachineImages(null, null, null) ) {
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was provided for this request");
+        }
+        for( MachineImage img : getCustomImages(ctx) ) {
+            if( img.getProviderMachineImageId().equals(machineImageId) ) {
+                return img;
+            }
+        }
+
+        for( MachineImage img : getPublicImages(ctx) ) {
             if( img.getProviderMachineImageId().equals(machineImageId) ) {
                 return img;
             }
@@ -132,7 +191,56 @@ public class MockImageSupport implements MachineImageSupport {
 
     @Override
     public @Nonnull AsynchronousTask<String> imageVirtualMachine(String vmId, String name, String description) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Imaging not supported"); // TODO: change this
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        final String endpoint = ctx.getEndpoint();
+        final String regionId = ctx.getRegionId();
+
+        if( endpoint == null || regionId == null ) {
+            throw new CloudException("Both endpoint and region must be set for this request");
+        }
+        @SuppressWarnings("ConstantConditions") VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
+
+        if( vm == null ) {
+            throw new CloudException("No such virtual machine: " + vmId);
+        }
+        final MachineImage image = new MachineImage();
+
+        image.setArchitecture(Architecture.I64);
+        image.setCurrentState(MachineImageState.PENDING);
+        image.setDescription(description);
+        image.setName(name);
+        image.setPlatform(vm.getPlatform());
+        image.setProviderMachineImageId(UUID.randomUUID().toString());
+        image.setProviderOwnerId(ctx.getAccountNumber());
+        image.setProviderRegionId(ctx.getRegionId());
+        image.setSoftware("");
+        image.setType(MachineImageType.VOLUME);
+
+        final AsynchronousTask<String> task = new AsynchronousTask<String>();
+
+        Thread t = new Thread() {
+            public void run() {
+                try { Thread.sleep(15000L + (random.nextInt(45) * 1000L)); }
+                catch( InterruptedException ignore ) { }
+                task.setPercentComplete(50);
+                try { Thread.sleep(15000L + (random.nextInt(45) * 1000L)); }
+                catch( InterruptedException ignore ) { }
+                addCustomImage(endpoint, regionId, image);
+                task.completeWithResult(image.getProviderMachineImageId());
+                try { Thread.sleep(15000L + (random.nextInt(45) * 1000L)); }
+                catch( InterruptedException ignore ) { }
+                image.setCurrentState(MachineImageState.ACTIVE);
+            }
+        };
+
+        t.setName("Image Builder");
+        t.setDaemon(true);
+        t.start();
+        return task;
     }
 
     @Override
@@ -157,20 +265,25 @@ public class MockImageSupport implements MachineImageSupport {
 
     @Override
     public @Nonnull Iterable<MachineImage> listMachineImages() throws CloudException, InternalException {
-        return Collections.emptyList();
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        return listMachineImagesOwnedBy(ctx.getEffectiveAccountNumber());
     }
 
     @Override
     public @Nonnull Iterable<MachineImage> listMachineImagesOwnedBy(String accountId) throws CloudException, InternalException {
-        if( accountId == null ) {
-            ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = provider.getContext();
 
-            if( ctx == null ) {
-                throw new CloudException("No context was provided for this request");
-            }
+        if( ctx == null ) {
+            throw new CloudException("No context was provided for this request");
+        }
+        if( accountId == null ) {
             return getPublicImages(ctx);
         }
-        return Collections.emptyList();
+        return getCustomImages(ctx);
     }
 
     @Override
@@ -190,7 +303,49 @@ public class MockImageSupport implements MachineImageSupport {
 
     @Override
     public void remove(@Nonnull String machineImageId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No removal support yet"); // TODO: implement me
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        synchronized( customImages ) {
+            Map<String,Collection<MachineImage>> cloud = customImages.get(ctx.getEndpoint());
+
+            if( cloud == null ) {
+                cloud = new HashMap<String, Collection<MachineImage>>();
+                customImages.put(ctx.getEndpoint(), cloud);
+            }
+            Collection<MachineImage> images = cloud.get(ctx.getRegionId());
+            ArrayList<MachineImage> newImages = new ArrayList<MachineImage>();
+
+            if( images == null ) {
+                images = new ArrayList<MachineImage>();
+                cloud.put(ctx.getRegionId(), images);
+                throw new CloudException("No such image: " + machineImageId);
+            }
+            boolean found = false;
+
+            for( MachineImage img : images ) {
+                if( img.getProviderMachineImageId().equals(machineImageId) ) {
+                    found = true;
+                }
+                else {
+                    newImages.add(img);
+                }
+            }
+            if( !found ) {
+                MachineImage img = getMachineImage(machineImageId);
+
+                if( img == null ) {
+                    throw new CloudException("No such image: " + machineImageId);
+                }
+                if( ctx.getEffectiveAccountNumber().equals(img.getProviderOwnerId()) ) {
+                    throw new CloudException("You do not own that image");
+                }
+                throw new CloudException("Removal failed for no discernable reason");
+            }
+            cloud.put(ctx.getRegionId(), newImages);
+        }
     }
 
     @Override
@@ -249,7 +404,7 @@ public class MockImageSupport implements MachineImageSupport {
 
     @Override
     public boolean supportsCustomImages() {
-        return false;
+        return true;
     }
 
     @Override
