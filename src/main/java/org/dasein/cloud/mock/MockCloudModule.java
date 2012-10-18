@@ -17,7 +17,9 @@
 package org.dasein.cloud.mock;
 
 import com.google.inject.AbstractModule;
+import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.dc.DataCenterServices;
+import org.dasein.cloud.mock.compute.MockComputeServices;
 
 /**
  * Module for binding a complete mock cloud with all services supported.
@@ -30,6 +32,7 @@ public class MockCloudModule extends AbstractModule {
     @Override
     public void configure() {
         bind(DataCenterServices.class).to(MockDataCenterServices.class);
+        bind(ComputeServices.class).to(MockComputeServices.class);
         requestStaticInjection(MockCloud.class);
     }
 }

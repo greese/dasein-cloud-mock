@@ -18,7 +18,9 @@ package org.dasein.cloud.mock;
 
 import com.google.inject.Inject;
 import org.dasein.cloud.AbstractCloud;
+import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.dc.DataCenterServices;
 
 import javax.annotation.Nonnull;
@@ -37,13 +39,39 @@ public class MockCloud extends AbstractCloud {
     @Inject
     static private DataCenterServices dataCenterServices;
 
+    @Inject
+    static private ComputeServices computeServices;
+
     public MockCloud() { }
+
+    @Override
+    public @Nonnull ComputeServices getComputeServices() {
+        try {
+            try {
+                Constructor<? extends ComputeServices> c = computeServices.getClass().getDeclaredConstructor(CloudProvider.class);
+
+                return c.newInstance(this);
+            }
+            catch( NoSuchMethodException e ) {
+                return computeServices.getClass().newInstance();
+            }
+        }
+        catch( InvocationTargetException e ) {
+            throw new RuntimeException("Unable to construct compute services: " + e.getMessage());
+        }
+        catch( InstantiationException e ) {
+            throw new RuntimeException("Unable to construct compute services: " + e.getMessage());
+        }
+        catch( IllegalAccessException e ) {
+            throw new RuntimeException("Unable to construct compute services: " + e.getMessage());
+        }
+    }
 
     @Override
     public @Nonnull DataCenterServices getDataCenterServices() {
         try {
             try {
-                Constructor<? extends DataCenterServices> c = dataCenterServices.getClass().getDeclaredConstructor(MockCloud.class);
+                Constructor<? extends DataCenterServices> c = dataCenterServices.getClass().getDeclaredConstructor(CloudProvider.class);
 
                 return c.newInstance(this);
             }

@@ -17,6 +17,7 @@
 package org.dasein.cloud.mock;
 
 import org.dasein.cloud.CloudException;
+import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.dc.DataCenterServices;
@@ -45,7 +46,7 @@ public class MockDataCenterServices implements DataCenterServices {
 
     public MockDataCenterServices() { }
 
-    public MockDataCenterServices(@SuppressWarnings("UnusedParameters") MockCloud cloud) {
+    public MockDataCenterServices(@SuppressWarnings("UnusedParameters") CloudProvider cloud) {
         if( regions == null ) {
             ArrayList<Region> list = new ArrayList<Region>();
             Region region;
