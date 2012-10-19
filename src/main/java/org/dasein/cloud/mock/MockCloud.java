@@ -22,6 +22,7 @@ import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.dc.DataCenterServices;
+import org.dasein.cloud.network.NetworkServices;
 
 import javax.annotation.Nonnull;
 import java.io.UnsupportedEncodingException;
@@ -37,10 +38,13 @@ import java.lang.reflect.InvocationTargetException;
  */
 public class MockCloud extends AbstractCloud {
     @Inject
+    static private ComputeServices computeServices;
+
+    @Inject
     static private DataCenterServices dataCenterServices;
 
     @Inject
-    static private ComputeServices computeServices;
+    static private NetworkServices networkServices;
 
     public MockCloud() { }
 
@@ -87,6 +91,29 @@ public class MockCloud extends AbstractCloud {
         }
         catch( IllegalAccessException e ) {
             throw new RuntimeException("Unable to construct data center services: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public @Nonnull NetworkServices getNetworkServices() {
+        try {
+            try {
+                Constructor<? extends NetworkServices> c = networkServices.getClass().getDeclaredConstructor(CloudProvider.class);
+
+                return c.newInstance(this);
+            }
+            catch( NoSuchMethodException e ) {
+                return networkServices.getClass().newInstance();
+            }
+        }
+        catch( InvocationTargetException e ) {
+            throw new RuntimeException("Unable to construct network services: " + e.getMessage());
+        }
+        catch( InstantiationException e ) {
+            throw new RuntimeException("Unable to construct network services: " + e.getMessage());
+        }
+        catch( IllegalAccessException e ) {
+            throw new RuntimeException("Unable to construct network services: " + e.getMessage());
         }
     }
 

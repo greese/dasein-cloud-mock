@@ -37,9 +37,8 @@ import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.compute.VmStatistics;
 import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.cloud.mock.MockCloud;
-import org.dasein.cloud.network.Firewall;
-import org.dasein.cloud.network.FirewallSupport;
+import org.dasein.cloud.mock.network.firewall.MockFirewallSupport;
+import org.dasein.cloud.mock.network.ip.MockIPSupport;
 import org.dasein.cloud.network.NetworkServices;
 import org.dasein.cloud.network.Subnet;
 import org.dasein.cloud.network.VLAN;
@@ -81,19 +80,52 @@ public class MockVMSupport implements VirtualMachineSupport {
         public String   owner;
         public String   privateIpAddress;
         public String   publicIpAddress;
-        public String   assignedIpAddress;
         public String   productId;
         public String   vlanId;
         public String   subnetId;
         public String   rootUser;
         public String   rootPassword;
-        public Collection<String> firewalls;
         public String   shellKey;
     }
 
     static private final HashMap<String,Map<String,Map<String,Collection<MockVM>>>> mockList = new HashMap<String, Map<String, Map<String, Collection<MockVM>>>>();
     static private Thread monitor;
     static private long   nextId = 1;
+    static private int    quad1  = 10;
+    static private int    quad2  = 0;
+    static private int    quad3  = 0;
+    static private int    quad4  = 0;
+
+    static public String[] getNextIpPair() throws CloudException {
+        synchronized( mockList ) {
+            quad4++;
+            if( quad4 > 253 ) {
+                quad4 = 1;
+                quad3++;
+                if( quad3 > 253 ) {
+                    quad3 = 0;
+                    if( quad1 == 10 ) {
+                        quad2++;
+                        if( quad2 > 253 ) {
+                            quad1 = 192;
+                            quad2 = 168;
+                        }
+                    }
+                    else if( quad1 == 192 ) {
+                        quad1 = 172;
+                        quad2 = 16;
+                    }
+                    else if( quad1 == 172 ) {
+                        quad2++;
+                        if( quad2 > 31 ) {
+                            throw new CloudException("Unable to allocate an IP address");
+                        }
+                    }
+                }
+            }
+            return new String[] { quad1 + "." + quad2 + "." + quad3 + "." + quad4, (15 + quad1) + "." + quad2 + "." + quad3 + "." + quad4 };
+        }
+    }
 
     static private @Nonnull String getNextId(@Nonnull String regionId) {
         synchronized( mockList ) {
@@ -157,6 +189,7 @@ public class MockVMSupport implements VirtualMachineSupport {
                                         if( random.nextInt(5760) == 5 ) {
                                             // whoops, crashed
                                             vm.currentState = VmState.TERMINATED;
+                                            MockFirewallSupport.vmTerminated(vm.vmId);
                                         }
                                         break;
                                     case PENDING:
@@ -342,6 +375,7 @@ public class MockVMSupport implements VirtualMachineSupport {
         }
         MockVM newVm = new MockVM();
 
+        newVm.vmId = getNextId(regionId);
         newVm.name = withLaunchOptions.getHostName();
         newVm.description = withLaunchOptions.getDescription();
         newVm.lastBoot = -1L;
@@ -350,9 +384,6 @@ public class MockVMSupport implements VirtualMachineSupport {
         newVm.created = newVm.lastTouched;
         newVm.owner = ctx.getAccountNumber();
         newVm.currentState = VmState.PENDING;
-        newVm.assignedIpAddress = null;
-        newVm.privateIpAddress = null;
-        newVm.publicIpAddress = null;
 
         if( !Requirement.NONE.equals(identifyPasswordRequirement()) ) {
             if( Requirement.REQUIRED.equals(identifyPasswordRequirement()) ) {
@@ -424,28 +455,16 @@ public class MockVMSupport implements VirtualMachineSupport {
                 }
             }
         }
+        else {
+            String[] ips = getNextIpPair();
+
+            newVm.privateIpAddress = ips[0];
+            newVm.publicIpAddress = ips[1];
+        }
         String[] firewalls = withLaunchOptions.getFirewallIds();
 
         if( firewalls.length > 0 ) {
-            NetworkServices network = provider.getNetworkServices();
-
-            if( network == null ) {
-                throw new CloudException("No firewall services supported in this cloud");
-            }
-            FirewallSupport firewall = network.getFirewallSupport();
-
-            if( firewall == null ) {
-                throw new CloudException("No firewall services supported in this cloud");
-            }
-            for( String id : firewalls ) {
-                Firewall fw = firewall.getFirewall(id);
-
-                if( fw == null ) {
-                    throw new CloudException("No such firewall: " + id);
-                }
-            }
-            newVm.firewalls = new ArrayList<String>();
-            Collections.addAll(newVm.firewalls, firewalls);
+            MockFirewallSupport.saveFirewallsForVM(provider, newVm.vmId, firewalls);
         }
 
         String imageId = withLaunchOptions.getMachineImageId();
@@ -462,7 +481,6 @@ public class MockVMSupport implements VirtualMachineSupport {
         }
         newVm.imageId = imageId;
         newVm.platform = image.getPlatform();
-        newVm.vmId = getNextId(regionId);
 
         synchronized( mockList ) {
             Map<String, Map<String, Collection<MockVM>>> cloud = mockList.get(ctx.getEndpoint());
@@ -577,20 +595,15 @@ public class MockVMSupport implements VirtualMachineSupport {
 
     @Override
     public @Nonnull Iterable<String> listFirewalls(@Nonnull String vmId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        VirtualMachine vm = getVirtualMachine(vmId);
 
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        MockVM mock = getMockVM(ctx, vmId);
-
-        if( mock == null ) {
+        if( vm == null ) {
             throw new CloudException("No such VM: " + vmId);
         }
-        if( mock.firewalls == null ) {
+        if( vm.getCurrentState().equals(VmState.TERMINATED) ) {
             return Collections.emptyList();
         }
-        return mock.firewalls;
+        return MockFirewallSupport.getFirewallsForVM(vmId);
     }
 
     private transient Collection<VirtualMachineProduct> products;
@@ -837,18 +850,26 @@ public class MockVMSupport implements VirtualMachineSupport {
         if( ctx == null ) {
             throw new CloudException("No context was provider for this request");
         }
+        String ip;
+
         synchronized( mockList ) {
             MockVM vm = getMockVM(ctx, vmId);
 
             if( vm == null ) {
                 throw new CloudException("No such VM: " + vmId);
             }
+            ip = MockIPSupport.getIPAddressForVM(vm.vmId);
             if( vm.currentState.equals(VmState.TERMINATED) ) {
                 throw new CloudException("The virtual machine is already terminated.");
             }
             vm.currentState = VmState.TERMINATED;
             vm.lastTouched = System.currentTimeMillis();
         }
+        if( ip != null ) {
+            //noinspection ConstantConditions
+            provider.getNetworkServices().getIpAddressSupport().releaseFromServer(ip);
+        }
+        MockFirewallSupport.vmTerminated(vmId);
     }
 
     @Override
@@ -921,7 +942,10 @@ public class MockVMSupport implements VirtualMachineSupport {
         vm.setCreationTimestamp(mock.created);
         vm.setCurrentState(mock.currentState);
         vm.setDescription(mock.description);
-        vm.setProviderAssignedIpAddressId(mock.assignedIpAddress);
+        vm.setProviderAssignedIpAddressId(MockIPSupport.getIPAddressForVM(mock.vmId));
+        if( vm.getProviderAssignedIpAddressId() != null ) {
+            vm.setPublicIpAddresses(new String[] { vm.getProviderAssignedIpAddressId() });
+        }
         return vm;
     }
 }
