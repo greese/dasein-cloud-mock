@@ -24,14 +24,18 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
+import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.Tag;
 import org.dasein.cloud.compute.Architecture;
 import org.dasein.cloud.compute.ComputeServices;
+import org.dasein.cloud.compute.ImageClass;
 import org.dasein.cloud.compute.MachineImage;
 import org.dasein.cloud.compute.MachineImageState;
 import org.dasein.cloud.compute.MachineImageSupport;
 import org.dasein.cloud.compute.Platform;
 import org.dasein.cloud.compute.VMLaunchOptions;
+import org.dasein.cloud.compute.VMScalingCapabilities;
+import org.dasein.cloud.compute.VMScalingOptions;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineProduct;
 import org.dasein.cloud.compute.VirtualMachineSupport;
@@ -41,7 +45,9 @@ import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.mock.network.firewall.MockFirewallSupport;
 import org.dasein.cloud.mock.network.ip.MockIPSupport;
+import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.NetworkServices;
+import org.dasein.cloud.network.RawAddress;
 import org.dasein.cloud.network.Subnet;
 import org.dasein.cloud.network.VLAN;
 import org.dasein.cloud.network.VLANSupport;
@@ -236,8 +242,18 @@ public class MockVMSupport implements VirtualMachineSupport {
     }
 
     @Override
+    public VirtualMachine alterVirtualMachine(@Nonnull String vmId, @Nonnull VMScalingOptions options) throws InternalException, CloudException {
+        throw new OperationNotSupportedException("No alter currently supported");
+    }
+
+    @Override
     public @Nonnull VirtualMachine clone(@Nonnull String vmId, @Nonnull String intoDcId, @Nonnull String name, @Nonnull String description, boolean powerOn, @Nullable String... firewallIds) throws InternalException, CloudException {
         throw new OperationNotSupportedException("No ability to clone in the mock cloud");
+    }
+
+    @Override
+    public VMScalingCapabilities describeVerticalScalingCapabilities() throws CloudException, InternalException {
+        return null;
     }
 
     @Override
@@ -253,6 +269,11 @@ public class MockVMSupport implements VirtualMachineSupport {
     @Override
     public @Nonnull String getConsoleOutput(@Nonnull String vmId) throws InternalException, CloudException {
         return "";
+    }
+
+    @Override
+    public int getCostFactor(@Nonnull VmState state) throws InternalException, CloudException {
+        return 100;
     }
 
     @Override
@@ -298,8 +319,18 @@ public class MockVMSupport implements VirtualMachineSupport {
     }
 
     @Override
+    public @Nonnull Requirement identifyImageRequirement(@Nonnull ImageClass cls) throws CloudException, InternalException {
+        return (cls.equals(ImageClass.MACHINE) ? Requirement.REQUIRED : Requirement.NONE);
+    }
+
+    @Override
     public @Nonnull Requirement identifyPasswordRequirement() throws CloudException, InternalException {
         return Requirement.OPTIONAL;
+    }
+
+    @Override
+    public @Nonnull Requirement identifyPasswordRequirement(Platform platform) throws CloudException, InternalException {
+        return (platform.isWindows() ? Requirement.REQUIRED : Requirement.OPTIONAL);
     }
 
     @Override
@@ -310,6 +341,16 @@ public class MockVMSupport implements VirtualMachineSupport {
     @Override
     public @Nonnull Requirement identifyShellKeyRequirement() throws CloudException, InternalException {
         return Requirement.OPTIONAL;
+    }
+
+    @Override
+    public @Nonnull Requirement identifyShellKeyRequirement(Platform platform) throws CloudException, InternalException {
+        return (platform.isWindows() ? Requirement.NONE : Requirement.OPTIONAL);
+    }
+
+    @Override
+    public @Nonnull Requirement identifyStaticIPRequirement() throws CloudException, InternalException {
+        return Requirement.NONE;
     }
 
     @Override
@@ -351,7 +392,7 @@ public class MockVMSupport implements VirtualMachineSupport {
     }
 
     @Override
-    public @Nonnull VirtualMachine launch(VMLaunchOptions withLaunchOptions) throws CloudException, InternalException {
+    public @Nonnull VirtualMachine launch(@Nonnull VMLaunchOptions withLaunchOptions) throws CloudException, InternalException {
         ProviderContext ctx = provider.getContext();
 
         if( ctx == null ) {
@@ -473,7 +514,7 @@ public class MockVMSupport implements VirtualMachineSupport {
 
         ComputeServices services = provider.getComputeServices();
         @SuppressWarnings("ConstantConditions") MachineImageSupport support = services.getImageSupport();
-        @SuppressWarnings("ConstantConditions") MachineImage image = support.getMachineImage(imageId);
+        @SuppressWarnings("ConstantConditions") MachineImage image = support.getImage(imageId);
 
         if( image == null ) {
             throw new CloudException("No such machine image: " + imageId);
@@ -661,6 +702,16 @@ public class MockVMSupport implements VirtualMachineSupport {
     }
 
     @Override
+    public @Nonnull Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
+        ArrayList<ResourceStatus> status = new ArrayList<ResourceStatus>();
+
+        for( VirtualMachine vm : listVirtualMachines() ) {
+            status.add(new ResourceStatus(vm.getProviderVirtualMachineId(), vm.getCurrentState()));
+        }
+        return status;
+    }
+
+    @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
         ProviderContext ctx = provider.getContext();
 
@@ -787,6 +838,11 @@ public class MockVMSupport implements VirtualMachineSupport {
 
     @Override
     public void stop(@Nonnull String vmId) throws InternalException, CloudException {
+        stop(vmId, false);
+    }
+
+    @Override
+    public void stop(@Nonnull String vmId, boolean force) throws InternalException, CloudException {
         ProviderContext ctx = provider.getContext();
 
         if( ctx == null ) {
@@ -895,6 +951,11 @@ public class MockVMSupport implements VirtualMachineSupport {
     }
 
     @Override
+    public void updateTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
+        // NO-OP
+    }
+
+    @Override
     public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
         return new String[0];
     }
@@ -923,7 +984,7 @@ public class MockVMSupport implements VirtualMachineSupport {
         vm.setPausable(true);
         vm.setPersistent(true);
         vm.setPlatform(mock.platform);
-        vm.setPrivateIpAddresses(new String[] { mock.privateIpAddress });
+        vm.setPrivateAddresses(new RawAddress(mock.privateIpAddress));
         vm.setProductId(mock.productId);
         vm.setProviderDataCenterId(dcId);
         vm.setProviderMachineImageId(mock.imageId);
@@ -932,7 +993,7 @@ public class MockVMSupport implements VirtualMachineSupport {
         vm.setProviderSubnetId(mock.subnetId);
         vm.setProviderVirtualMachineId(mock.vmId);
         vm.setProviderVlanId(mock.vlanId);
-        vm.setPublicIpAddresses(new String[] { mock.publicIpAddress });
+        vm.setPublicAddresses(new RawAddress(mock.publicIpAddress));
         vm.setRebootable(true);
         vm.setRootPassword(mock.rootPassword);
         vm.setRootUser(mock.rootUser);
@@ -946,7 +1007,7 @@ public class MockVMSupport implements VirtualMachineSupport {
         vm.setDescription(mock.description);
         vm.setProviderAssignedIpAddressId(MockIPSupport.getIPAddressForVM(mock.vmId));
         if( vm.getProviderAssignedIpAddressId() != null ) {
-            vm.setPublicIpAddresses(new String[] { vm.getProviderAssignedIpAddressId() });
+            vm.setPublicAddresses(new RawAddress(vm.getProviderAssignedIpAddressId()));
         }
         return vm;
     }

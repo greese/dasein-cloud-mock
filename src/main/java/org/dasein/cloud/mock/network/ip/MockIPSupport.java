@@ -23,6 +23,8 @@ import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.Requirement;
+import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineSupport;
@@ -254,12 +256,22 @@ public class MockIPSupport implements IpAddressSupport {
     }
 
     @Override
+    public @Nonnull Requirement identifyVlanForVlanIPRequirement() throws CloudException, InternalException {
+        return Requirement.NONE;
+    }
+
+    @Override
     public boolean isAssigned(@Nonnull AddressType type) {
         return (type.equals(AddressType.PUBLIC));
     }
 
     @Override
     public boolean isAssigned(@Nonnull IPVersion version) throws CloudException, InternalException {
+        return true;
+    }
+
+    @Override
+    public boolean isAssignablePostLaunch(@Nonnull IPVersion version) throws CloudException, InternalException {
         return true;
     }
 
@@ -351,6 +363,16 @@ public class MockIPSupport implements IpAddressSupport {
             }
         }
         return addresses;
+    }
+
+    @Override
+    public @Nonnull Iterable<ResourceStatus> listIpPoolStatus(@Nonnull IPVersion version) throws InternalException, CloudException {
+        ArrayList<ResourceStatus> status = new ArrayList<ResourceStatus>();
+
+        for( IpAddress addr : listIpPool(version, false) ) {
+            status.add(new ResourceStatus(addr.getProviderIpAddressId(), !addr.isAssigned()));
+        }
+        return status;
     }
 
     @Override
@@ -456,8 +478,13 @@ public class MockIPSupport implements IpAddressSupport {
     }
 
     @Override
-    public @Nonnull String requestForVLAN(IPVersion version) throws InternalException, CloudException {
+    public @Nonnull String requestForVLAN(@Nonnull IPVersion version) throws InternalException, CloudException {
         throw new OperationNotSupportedException("VLAN IP addresses are not yet supported");
+    }
+
+    @Override
+    public @Nonnull String requestForVLAN(@Nonnull IPVersion version, @Nonnull String vlanId) throws InternalException, CloudException {
+        throw new OperationNotSupportedException("No support for VLAN IP addresses");
     }
 
     @Override
