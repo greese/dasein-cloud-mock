@@ -224,7 +224,7 @@
 
                     </systemProperties>
                     <includes>
-                        <include>**/MockCloudTestSuite.java</include>
+                        <!-- <include>**/MockCloudTestSuite.java</include> -->
                     </includes>
                 </configuration>
             </plugin>
