@@ -30,6 +30,7 @@ import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineSupport;
 import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.network.AbstractFirewallSupport;
 import org.dasein.cloud.network.Direction;
 import org.dasein.cloud.network.Firewall;
 import org.dasein.cloud.network.FirewallRule;
@@ -57,7 +58,7 @@ import java.util.UUID;
  * @version 2012.09 initial version
  * @since 2012.09
  */
-public class MockFirewallSupport implements FirewallSupport {
+public class MockFirewallSupport extends AbstractFirewallSupport {
     static private final Map<String,Map<String,Map<String,Collection<Firewall>>>> firewalls = new HashMap<String, Map<String, Map<String, Collection<Firewall>>>>();
     static private final Map<String,Collection<FirewallRule>>                     rules     = new HashMap<String, Collection<FirewallRule>>();
     static private final Map<String,Collection<String>>                           vmMap     = new HashMap<String, Collection<String>>();
@@ -130,57 +131,9 @@ public class MockFirewallSupport implements FirewallSupport {
 
     private CloudProvider provider;
 
-    public MockFirewallSupport(CloudProvider provider) { this.provider = provider; }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        return authorize(firewallId, Direction.INGRESS, cidr, protocol, beginPort,  endPort);
-    }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        RuleTarget sourceEndpoint, destinationEndpoint;
-
-        if( direction.equals(Direction.INGRESS) ) {
-            sourceEndpoint = RuleTarget.getCIDR(cidr);
-            destinationEndpoint = RuleTarget.getGlobal(firewallId);
-        }
-        else {
-            sourceEndpoint = RuleTarget.getGlobal(firewallId);
-            destinationEndpoint = RuleTarget.getCIDR(cidr);
-        }
-        return authorize(firewallId, direction, Permission.ALLOW, sourceEndpoint, protocol, destinationEndpoint, beginPort, endPort, 0);
-    }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        RuleTarget sourceEndpoint, destinationEndpoint;
-
-        if( direction.equals(Direction.INGRESS) ) {
-            sourceEndpoint = RuleTarget.getCIDR(source);
-            destinationEndpoint = RuleTarget.getGlobal(firewallId);
-        }
-        else {
-            sourceEndpoint = RuleTarget.getGlobal(firewallId);
-            destinationEndpoint = RuleTarget.getCIDR(source);
-        }
-        return authorize(firewallId, direction, permission, sourceEndpoint, protocol, destinationEndpoint, beginPort, endPort, 0);
-
-    }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, @Nonnull RuleTarget target, int beginPort, int endPort) throws CloudException, InternalException {
-        RuleTarget sourceEndpoint, destinationEndpoint;
-
-        if( direction.equals(Direction.INGRESS) ) {
-            sourceEndpoint = RuleTarget.getCIDR(source);
-            destinationEndpoint = target;
-        }
-        else {
-            sourceEndpoint = target;
-            destinationEndpoint = RuleTarget.getCIDR(source);
-        }
-        return authorize(firewallId, direction, permission, sourceEndpoint, protocol, destinationEndpoint, beginPort, endPort, 0);
+    public MockFirewallSupport(CloudProvider provider) {
+        super(provider);
+        this.provider = provider;
     }
 
     @Override
