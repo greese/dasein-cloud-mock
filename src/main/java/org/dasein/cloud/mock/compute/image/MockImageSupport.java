@@ -27,17 +27,9 @@ import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.Tag;
-import org.dasein.cloud.compute.Architecture;
-import org.dasein.cloud.compute.ImageClass;
-import org.dasein.cloud.compute.ImageCreateOptions;
-import org.dasein.cloud.compute.MachineImage;
-import org.dasein.cloud.compute.MachineImageFormat;
-import org.dasein.cloud.compute.MachineImageState;
-import org.dasein.cloud.compute.MachineImageSupport;
-import org.dasein.cloud.compute.MachineImageType;
-import org.dasein.cloud.compute.Platform;
-import org.dasein.cloud.compute.VirtualMachine;
+import org.dasein.cloud.compute.*;
 import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.mock.MockCloud;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -57,8 +49,7 @@ import java.util.UUID;
  * @version 2012.09 initial version
  * @since 2012.09
  */
-public class MockImageSupport implements MachineImageSupport {
-    private CloudProvider provider;
+public class MockImageSupport extends AbstractImageSupport<MockCloud> implements MachineImageSupport {
 
     static private final Map<String,Map<String,Collection<MachineImage>>> customImages = new HashMap<String, Map<String, Collection<MachineImage>>>();
     static private final Map<String,Map<String,Collection<MachineImage>>> publicImages = new HashMap<String, Map<String, Collection<MachineImage>>>();
@@ -158,32 +149,12 @@ public class MockImageSupport implements MachineImageSupport {
         }
     }
 
-    public MockImageSupport(CloudProvider provider) { this.provider = provider; }
-
-    @Override
-    public void addImageShare(@Nonnull String providerImageId, @Nonnull String accountNumber) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No sharing yet");
+    public MockImageSupport(MockCloud provider) {
+        super(provider);
     }
 
-    @Override
-    public void addPublicShare(@Nonnull String providerImageId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No sharing yet");
-    }
-
-    @Override
-    public @Nonnull String bundleVirtualMachine(@Nonnull String virtualMachineId, @Nonnull MachineImageFormat format, @Nonnull String bucket, @Nonnull String name) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No bundling yet");
-    }
-
-    @Override
-    public void bundleVirtualMachineAsync(@Nonnull String virtualMachineId, @Nonnull MachineImageFormat format, @Nonnull String bucket, @Nonnull String name, @Nonnull AsynchronousTask<String> trackingTask) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No bundling yet");
-    }
-
-    @Override
-    public @Nonnull MachineImage captureImage(@Nonnull ImageCreateOptions options) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
-
+    protected MachineImage capture(@Nonnull ImageCreateOptions options, @Nullable AsynchronousTask<MachineImage> task) throws CloudException, InternalException {
+        ProviderContext ctx = getProvider().getContext();
         if( ctx == null ) {
             throw new CloudException("No context was provided for this request");
         }
@@ -191,31 +162,8 @@ public class MockImageSupport implements MachineImageSupport {
     }
 
     @Override
-    public void captureImageAsync(final @Nonnull ImageCreateOptions options, final @Nonnull AsynchronousTask<MachineImage> taskTracker) throws CloudException, InternalException {
-        final ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was provided for this request");
-        }
-
-        Thread t = new Thread() {
-            public void run() {
-                try {
-                    image(ctx, options, taskTracker);
-                }
-                catch( Throwable t ) {
-                    taskTracker.complete(t);
-                }
-            }
-        };
-        t.setName("Image Builder");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    @Override
     public MachineImage getImage(@Nonnull String providerImageId) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provided for this request");
@@ -234,39 +182,8 @@ public class MockImageSupport implements MachineImageSupport {
         return null;
     }
 
-    @Override
-    @Deprecated
-    public MachineImage getMachineImage(@Nonnull String machineImageId) throws CloudException, InternalException {
-        return getImage(machineImageId);
-    }
-
-    @Override
-    public @Nonnull String getProviderTermForImage(@Nonnull Locale locale) {
-        return getProviderTermForImage(locale, ImageClass.MACHINE);
-    }
-
-    @Override
-    public @Nonnull String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
-        return (cls.name().toLowerCase() + " image");
-    }
-
-    @Override
-    public @Nonnull String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
-        return getProviderTermForImage(locale, cls);
-    }
-
-    @Override
-    public boolean hasPublicLibrary() {
-        return true;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyLocalBundlingRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
     private @Nonnull MachineImage image(@Nonnull ProviderContext ctx, @Nonnull ImageCreateOptions options, @Nullable AsynchronousTask<MachineImage> optionalTask) throws CloudException, InternalException {
-        @SuppressWarnings("ConstantConditions") VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(options.getVirtualMachineId());
+        @SuppressWarnings("ConstantConditions") VirtualMachine vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(options.getVirtualMachineId());
 
         if( vm == null ) {
             throw new CloudException("No such virtual machine: " + options.getVirtualMachineId());
@@ -307,54 +224,54 @@ public class MockImageSupport implements MachineImageSupport {
         return image;
     }
 
-    @Override
-    public @Nonnull AsynchronousTask<String> imageVirtualMachine(String vmId, String name, String description) throws CloudException, InternalException {
-        @SuppressWarnings("ConstantConditions") VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
-
-        if( vm == null ) {
-            throw new CloudException("No such virtual machine: " + vmId);
-        }
-        final ImageCreateOptions options = ImageCreateOptions.getInstance(vm,  name, description);
-        final ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-
-        final MachineImage image = new MachineImage();
-
-        image.setArchitecture(Architecture.I64);
-        image.setCurrentState(MachineImageState.PENDING);
-        image.setDescription(description);
-        image.setName(name);
-        image.setPlatform(vm.getPlatform());
-        image.setProviderMachineImageId(UUID.randomUUID().toString());
-        image.setProviderOwnerId(ctx.getAccountNumber());
-        image.setProviderRegionId(ctx.getRegionId());
-        image.setSoftware("");
-        image.setType(MachineImageType.VOLUME);
-
-        final AsynchronousTask<String> task = new AsynchronousTask<String>();
-
-        Thread t = new Thread() {
-            public void run() {
-                try {
-                    MachineImage img = image(ctx, options, null);
-
-                    task.completeWithResult(img.getProviderMachineImageId());
-                }
-                catch( Throwable t ) {
-                    task.complete(t);
-                }
-
-            }
-        };
-
-        t.setName("Image Builder");
-        t.setDaemon(true);
-        t.start();
-        return task;
-    }
+//    @Override
+//    public @Nonnull AsynchronousTask<String> imageVirtualMachine(String vmId, String name, String description) throws CloudException, InternalException {
+//        @SuppressWarnings("ConstantConditions") VirtualMachine vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
+//
+//        if( vm == null ) {
+//            throw new CloudException("No such virtual machine: " + vmId);
+//        }
+//        final ImageCreateOptions options = ImageCreateOptions.getInstance(vm,  name, description);
+//        final ProviderContext ctx = getProvider().getContext();
+//
+//        if( ctx == null ) {
+//            throw new CloudException("No context was set for this request");
+//        }
+//
+//        final MachineImage image = new MachineImage();
+//
+//        image.setArchitecture(Architecture.I64);
+//        image.setCurrentState(MachineImageState.PENDING);
+//        image.setDescription(description);
+//        image.setName(name);
+//        image.setPlatform(vm.getPlatform());
+//        image.setProviderMachineImageId(UUID.randomUUID().toString());
+//        image.setProviderOwnerId(ctx.getAccountNumber());
+//        image.setProviderRegionId(ctx.getRegionId());
+//        image.setSoftware("");
+//        image.setType(MachineImageType.VOLUME);
+//
+//        final AsynchronousTask<String> task = new AsynchronousTask<String>();
+//
+//        Thread t = new Thread() {
+//            public void run() {
+//                try {
+//                    MachineImage img = image(ctx, options, null);
+//
+//                    task.completeWithResult(img.getProviderMachineImageId());
+//                }
+//                catch( Throwable t ) {
+//                    task.complete(t);
+//                }
+//
+//            }
+//        };
+//
+//        t.setName("Image Builder");
+//        t.setDaemon(true);
+//        t.start();
+//        return task;
+//    }
 
     @Override
     public boolean isImageSharedWithPublic(@Nonnull String machineImageId) throws CloudException, InternalException {
@@ -377,11 +294,17 @@ public class MockImageSupport implements MachineImageSupport {
     }
 
     @Override
+    public @Nonnull Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options)
+            throws CloudException, InternalException {
+        return null;//TODO
+    }
+
+    @Override
     public @Nonnull Iterable<MachineImage> listImages(@Nonnull ImageClass cls) throws CloudException, InternalException {
         if( !cls.equals(ImageClass.MACHINE) ) {
             return Collections.emptyList();
         }
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
@@ -391,7 +314,7 @@ public class MockImageSupport implements MachineImageSupport {
 
     @Override
     public @Nonnull Iterable<MachineImage> listImages(@Nonnull ImageClass cls, @Nonnull String ownedBy) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provided for this request");
@@ -407,7 +330,7 @@ public class MockImageSupport implements MachineImageSupport {
 
     @Override
     public @Nonnull Iterable<MachineImage> listMachineImagesOwnedBy(String accountId) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provided for this request");
@@ -419,33 +342,8 @@ public class MockImageSupport implements MachineImageSupport {
     }
 
     @Override
-    public @Nonnull Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
-        return Collections.singletonList(MachineImageFormat.OVF);
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImageFormat> listSupportedFormatsForBundling() throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
     public @Nonnull Iterable<String> listShares(@Nonnull String forMachineImageId) throws CloudException, InternalException {
         return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<ImageClass> listSupportedImageClasses() throws CloudException, InternalException {
-        return Collections.singletonList(ImageClass.MACHINE);
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImageType> listSupportedImageTypes() throws CloudException, InternalException {
-        return Collections.singletonList(MachineImageType.VOLUME);
-    }
-
-    @Override
-    public @Nonnull MachineImage registerImageBundle(@Nonnull ImageCreateOptions options) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Operation not supported");
     }
 
     @Override
@@ -455,7 +353,7 @@ public class MockImageSupport implements MachineImageSupport {
 
     @Override
     public void remove(@Nonnull String providerImageId, boolean checkState) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
@@ -498,21 +396,6 @@ public class MockImageSupport implements MachineImageSupport {
             }
             cloud.put(ctx.getRegionId(), newImages);
         }
-    }
-
-    @Override
-    public void removeAllImageShares(@Nonnull String providerImageId) throws CloudException, InternalException {
-        // NO-OP
-    }
-
-    @Override
-    public void removeImageShare(@Nonnull String providerImageId, @Nonnull String accountNumber) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Image shares is not yet supported");
-    }
-
-    @Override
-    public void removePublicShare(@Nonnull String providerImageId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Image sharing is not yet mocked");
     }
 
     private boolean matches(MachineImage img, @Nullable String accountNumber, @Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture) {
@@ -566,7 +449,7 @@ public class MockImageSupport implements MachineImageSupport {
 
     @Override
     public @Nonnull Iterable<MachineImage> searchImages(@Nullable String accountNumber, @Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
@@ -598,7 +481,7 @@ public class MockImageSupport implements MachineImageSupport {
 
     @Override
     public @Nonnull Iterable<MachineImage> searchPublicImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
@@ -621,47 +504,12 @@ public class MockImageSupport implements MachineImageSupport {
     }
 
     @Override
-    public void shareMachineImage(@Nonnull String machineImageId, @Nullable String withAccountId, boolean allow) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No ability to share a machine image with other accounts");
-    }
-
-    @Override
-    public boolean supportsCustomImages() {
-        return true;
-    }
-
-    @Override
-    public boolean supportsDirectImageUpload() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean supportsImageCapture(@Nonnull MachineImageType type) throws CloudException, InternalException {
-        return type.equals(MachineImageType.VOLUME);
-    }
-
-    @Override
-    public boolean supportsImageSharing() {
-        return false;
-    }
-
-    @Override
-    public boolean supportsImageSharingWithPublic() {
-        return false;
-    }
-
-    @Override
-    public boolean supportsPublicLibrary(@Nonnull ImageClass cls) throws CloudException, InternalException {
-        return cls.equals(ImageClass.MACHINE);
-    }
-
-    @Override
-    public void updateTags(@Nonnull String imageId, @Nonnull Tag... tags) throws CloudException, InternalException {
-        // NO-OP
-    }
-
-    @Override
     public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
         return new String[0];
+    }
+
+    @Override
+    public ImageCapabilities getCapabilities() throws CloudException, InternalException {
+        return new MockImageCapabilities(getProvider());
     }
 }

@@ -21,9 +21,7 @@ package org.dasein.cloud.mock;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.InternalException;
-import org.dasein.cloud.dc.DataCenter;
-import org.dasein.cloud.dc.DataCenterServices;
-import org.dasein.cloud.dc.Region;
+import org.dasein.cloud.dc.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -42,13 +40,13 @@ import java.util.Map;
  * @version 2012.07
  * @since 2012.07
  */
-public class MockDataCenterServices implements DataCenterServices {
+public class MockDataCenterServices extends AbstractDataCenterServices<MockCloud> implements DataCenterServices {
     static private Map<String,List<DataCenter>> dataCenters;
     static private List<Region> regions;
 
-    public MockDataCenterServices() { }
+    public MockDataCenterServices(MockCloud provider) {
+        super(provider);
 
-    public MockDataCenterServices(@SuppressWarnings("UnusedParameters") CloudProvider cloud) {
         if( regions == null ) {
             ArrayList<Region> list = new ArrayList<Region>();
             Region region;
@@ -141,16 +139,6 @@ public class MockDataCenterServices implements DataCenterServices {
     }
 
     @Override
-    public String getProviderTermForDataCenter(Locale locale) {
-        return "zone";
-    }
-
-    @Override
-    public String getProviderTermForRegion(Locale locale) {
-        return "region";
-    }
-
-    @Override
     public @Nullable Region getRegion(@Nonnull String providerRegionId) throws InternalException, CloudException {
         for( Region region : listRegions() ) {
             if( providerRegionId.equals(region.getProviderRegionId()) ) {
@@ -171,5 +159,11 @@ public class MockDataCenterServices implements DataCenterServices {
     @Override
     public @Nonnull Collection<Region> listRegions() throws InternalException, CloudException {
         return regions;
+    }
+
+    @Nonnull
+    @Override
+    public DataCenterCapabilities getCapabilities() throws InternalException, CloudException {
+        return new MockDataCenterCapabilities(getProvider());
     }
 }

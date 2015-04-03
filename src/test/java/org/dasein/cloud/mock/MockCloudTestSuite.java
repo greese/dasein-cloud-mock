@@ -18,10 +18,7 @@
 
 package org.dasein.cloud.mock;
 
-import com.google.inject.Guice;
-import junit.framework.Test;
-import org.dasein.cloud.test.ComprehensiveTestSuite;
-import org.dasein.cloud.test.TestConfigurationException;
+import org.dasein.cloud.test.GlobalTestSuite;
 
 /**
  * Verifies that the mock cloud can pass the Dasein Cloud test suite.
@@ -30,10 +27,5 @@ import org.dasein.cloud.test.TestConfigurationException;
  * @version 2012.07
  * @since 2012.07
  */
-public class MockCloudTestSuite  {
-    static public Test suite() throws TestConfigurationException {
-        Guice.createInjector(new MockCloudModule());
-
-        return new ComprehensiveTestSuite(MockCloud.class);
-    }
+public class MockCloudTestSuite  extends GlobalTestSuite {
 }

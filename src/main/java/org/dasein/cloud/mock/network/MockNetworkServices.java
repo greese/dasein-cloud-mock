@@ -37,17 +37,15 @@ import javax.annotation.Nonnull;
 public class MockNetworkServices extends AbstractNetworkServices {
     private CloudProvider provider;
 
-    public MockNetworkServices() { }
+    public MockNetworkServices(CloudProvider provider) {
+        this.provider = provider;
+    }
 
-    public MockNetworkServices(CloudProvider provider) { this.provider = provider; }
-
-    @Override
-    public @Nonnull FirewallSupport getFirewallSupport() {
+    @Override public @Nonnull FirewallSupport getFirewallSupport() {
         return new MockFirewallSupport(provider);
     }
 
-    @Override
-    public @Nonnull IpAddressSupport getIpAddressSupport() {
+    @Override public @Nonnull IpAddressSupport getIpAddressSupport() {
         return new MockIPSupport(provider);
     }
 }
