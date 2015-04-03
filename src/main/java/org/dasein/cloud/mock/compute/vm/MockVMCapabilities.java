@@ -1,3 +1,22 @@
+/**
+ * Copyright (C) 2009-2015 Dell, Inc.
+ * See annotations for authorship information
+ *
+ * ====================================================================
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * ====================================================================
+ *
+ */
 package org.dasein.cloud.mock.compute.vm;
 
 import org.dasein.cloud.*;
@@ -12,9 +31,8 @@ import java.util.Collections;
 import java.util.Locale;
 
 /**
- * User: cke
- * Date: 4/3/2015
- * Time: 10:21 AM
+ * @author Colin Ke.
+ * @since 2015.05.1
  */
 public class MockVMCapabilities extends AbstractCapabilities<MockCloud> implements VirtualMachineCapabilities {
 
@@ -159,10 +177,10 @@ public class MockVMCapabilities extends AbstractCapabilities<MockCloud> implemen
     public Requirement identifyVlanRequirement() throws CloudException, InternalException {
         NetworkServices network = getProvider().getNetworkServices();
 
-        if( network == null ) {
+        if (network == null) {
             return Requirement.NONE;
         }
-        if( network.hasVlanSupport() ) {
+        if (network.hasVlanSupport()) {
             return Requirement.REQUIRED;
         }
         return Requirement.NONE;
@@ -267,17 +285,5 @@ public class MockVMCapabilities extends AbstractCapabilities<MockCloud> implemen
     @Override
     public boolean supportsUnPause() {
         return false;
-    }
-
-    @Nonnull
-    @Override
-    public String getAccountNumber() {
-        return null;
-    }
-
-    @Nonnull
-    @Override
-    public String getRegionId() {
-        return null;
     }
 }
