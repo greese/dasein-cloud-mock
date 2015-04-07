@@ -18,29 +18,13 @@
 
 package org.dasein.cloud.mock.compute.image;
 
-import org.dasein.cloud.AsynchronousTask;
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.CloudProvider;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
-import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.Requirement;
-import org.dasein.cloud.ResourceStatus;
-import org.dasein.cloud.Tag;
+import org.dasein.cloud.*;
 import org.dasein.cloud.compute.*;
-import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.mock.MockCloud;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Implements mocked up image management services for the Dasein Cloud mock cloud.
@@ -284,72 +268,11 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
     }
 
     @Override
-    public @Nonnull Iterable<ResourceStatus> listImageStatus(@Nonnull ImageClass cls) throws CloudException, InternalException {
-        ArrayList<ResourceStatus> status = new ArrayList<ResourceStatus>();
-
-        for( MachineImage img : listImages(cls) ) {
-            status.add(new ResourceStatus(img.getProviderMachineImageId(), img.getCurrentState()));
-        }
-        return status;
-    }
-
-    @Override
     public @Nonnull Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options)
             throws CloudException, InternalException {
         return null;//TODO
     }
 
-    @Override
-    public @Nonnull Iterable<MachineImage> listImages(@Nonnull ImageClass cls) throws CloudException, InternalException {
-        if( !cls.equals(ImageClass.MACHINE) ) {
-            return Collections.emptyList();
-        }
-        ProviderContext ctx = getProvider().getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        return listMachineImagesOwnedBy(ctx.getEffectiveAccountNumber());
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> listImages(@Nonnull ImageClass cls, @Nonnull String ownedBy) throws CloudException, InternalException {
-        ProviderContext ctx = getProvider().getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was provided for this request");
-        }
-        return getCustomImages(ctx);
-    }
-
-    @Override
-    @Deprecated
-    public @Nonnull Iterable<MachineImage> listMachineImages() throws CloudException, InternalException {
-        return listImages(ImageClass.MACHINE);
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> listMachineImagesOwnedBy(String accountId) throws CloudException, InternalException {
-        ProviderContext ctx = getProvider().getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was provided for this request");
-        }
-        if( accountId == null ) {
-            return getPublicImages(ctx);
-        }
-        return listImages(ImageClass.MACHINE, accountId);
-    }
-
-    @Override
-    public @Nonnull Iterable<String> listShares(@Nonnull String forMachineImageId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public void remove(@Nonnull String machineImageId) throws CloudException, InternalException {
-        remove(machineImageId, false);
-    }
 
     @Override
     public void remove(@Nonnull String providerImageId, boolean checkState) throws CloudException, InternalException {
@@ -432,80 +355,6 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
             }
         }
         return !(architecture != null && !img.getArchitecture().equals(architecture));
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> searchMachineImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture) throws CloudException, InternalException {
-        HashMap<String,MachineImage> images = new HashMap<String, MachineImage>();
-
-        for( MachineImage img : searchImages(null, keyword, platform, architecture, ImageClass.MACHINE) ) {
-            images.put(img.getProviderMachineImageId(), img);
-        }
-        for( MachineImage img : searchPublicImages(keyword, platform, architecture, ImageClass.MACHINE) ) {
-            images.put(img.getProviderMachineImageId(), img);
-        }
-        return images.values();
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> searchImages(@Nullable String accountNumber, @Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        ProviderContext ctx = getProvider().getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        if( imageClasses == null ) {
-            imageClasses = ImageClass.values();
-        }
-        ArrayList<MachineImage> images = new ArrayList<MachineImage>();
-
-        for( ImageClass cls : imageClasses ) {
-            Iterable<MachineImage> list;
-
-            if( accountNumber == null ) {
-                list = listImages(cls);
-            }
-            else {
-                list = listImages(cls, accountNumber);
-            }
-            for( MachineImage img : list ) {
-                if( img != null && cls.equals(img.getImageClass())) {
-                    if( matches( img, accountNumber, keyword, platform, architecture) ) {
-                        images.add(img);
-                    }
-                }
-            }
-        }
-        return images;
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        ProviderContext ctx = getProvider().getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        if( imageClasses == null || imageClasses.length < 1 ) {
-            imageClasses = ImageClass.values();
-        }
-        ArrayList<MachineImage> images = new ArrayList<MachineImage>();
-
-        for( ImageClass cls : imageClasses ) {
-            for( MachineImage img : getPublicImages(ctx) ) {
-                 if( img != null && cls.equals(img.getImageClass())) {
-                     if( matches(img, null, keyword, platform, architecture) ) {
-                         images.add(img);
-                    }
-                }
-            }
-        }
-        return images;
-    }
-
-    @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
     }
 
     @Override
