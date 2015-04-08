@@ -18,34 +18,18 @@
 
 package org.dasein.cloud.mock.network.ip;
 
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.CloudProvider;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
-import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.Requirement;
-import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.*;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineSupport;
 import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.cloud.network.AddressType;
-import org.dasein.cloud.network.IPVersion;
-import org.dasein.cloud.network.IpAddress;
-import org.dasein.cloud.network.IpAddressSupport;
-import org.dasein.cloud.network.IpForwardingRule;
-import org.dasein.cloud.network.Protocol;
+import org.dasein.cloud.mock.MockCloud;
+import org.dasein.cloud.network.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Random;
-import java.util.TreeSet;
+import java.util.*;
+import java.util.concurrent.Future;
 
 /**
  * Mock support for public IP address management in the cloud, including IPv4 and IPv6 support.
@@ -54,7 +38,7 @@ import java.util.TreeSet;
  * @version 2012.09 initial version
  * @since 2012.09
  */
-public class MockIPSupport implements IpAddressSupport {
+public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implements IpAddressSupport {
     static private final TreeSet<String>                                            allocatedIps  = new TreeSet<String>();
     static private final HashMap<String,Map<String,Map<String,Collection<String>>>> allocations   = new HashMap<String, Map<String, Map<String,Collection<String>>>>();
     static private final HashMap<String,String>                                     vmAssignments = new HashMap<String, String>();
@@ -196,18 +180,18 @@ public class MockIPSupport implements IpAddressSupport {
         return null;
     }
 
-    private CloudProvider provider;
-
-    public MockIPSupport(@Nonnull CloudProvider provider) { this.provider = provider; }
+    public MockIPSupport(@Nonnull MockCloud provider) {
+        super(provider);
+    }
 
     @Override
     public void assign(@Nonnull String addressId, @Nonnull String serverId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
-        ComputeServices compute = provider.getComputeServices();
+        ComputeServices compute = getProvider().getComputeServices();
 
         if( compute == null ) {
             throw new CloudException("This cloud does not support compute services");
@@ -314,7 +298,7 @@ public class MockIPSupport implements IpAddressSupport {
     @Override
     public @Nonnull Iterable<IpAddress> listIpPool(@Nonnull IPVersion version, boolean unassignedOnly) throws InternalException, CloudException {
         ArrayList<IpAddress> addresses = new ArrayList<IpAddress>();
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
@@ -391,7 +375,7 @@ public class MockIPSupport implements IpAddressSupport {
 
     @Override
     public void releaseFromPool(@Nonnull String ip) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
@@ -425,7 +409,7 @@ public class MockIPSupport implements IpAddressSupport {
 
     @Override
     public void releaseFromServer(@Nonnull String ip) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
@@ -469,7 +453,7 @@ public class MockIPSupport implements IpAddressSupport {
 
     @Override
     public @Nonnull String request(@Nonnull IPVersion version) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
@@ -500,5 +484,18 @@ public class MockIPSupport implements IpAddressSupport {
     @Override
     public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
         return new String[0];
+    }
+
+    @Nonnull
+    @Override
+    public Future<Iterable<IpAddress>> listIpPoolConcurrently(@Nonnull IPVersion version, boolean unassignedOnly)
+            throws InternalException, CloudException {
+        return null;
+    }
+
+    @Nonnull
+    @Override
+    public IPAddressCapabilities getCapabilities() throws CloudException, InternalException {
+        return null;
     }
 }

@@ -20,6 +20,7 @@ package org.dasein.cloud.mock;
 
 import org.dasein.cloud.AbstractCloud;
 import org.dasein.cloud.CloudProvider;
+import org.dasein.cloud.ContextRequirements;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.dc.DataCenterServices;
@@ -72,6 +73,13 @@ public class MockCloud extends AbstractCloud {
         String name = (ctx == null ? null : ctx.getProviderName());
 
         return (name == null ? "Dasein" : name);
+    }
+
+    public @Nonnull
+    ContextRequirements getContextRequirements() {
+        return new ContextRequirements(
+                new ContextRequirements.Field("apiKey", ContextRequirements.FieldType.KEYPAIR)
+        );
     }
 
     @Override

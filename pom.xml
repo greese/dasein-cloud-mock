@@ -173,20 +173,16 @@
                 <configuration>
                     <systemProperties>
                         <property>
+                            <name>providerClass</name>
+                            <value>org.dasein.cloud.mock.MockCloud</value>
+                        </property>
+                        <property>
                             <name>endpoint</name>
                             <value>http://localhost</value>
                         </property>
                         <property>
                             <name>accountNumber</name>
                             <value>12345</value>
-                        </property>
-                        <property>
-                            <name>apiSharedKey</name>
-                            <value>6789</value>
-                        </property>
-                        <property>
-                            <name>apiSecretKey</name>
-                            <value>abcdefghijkl</value>
                         </property>
                         <property>
                             <name>cloudName</name>
@@ -201,9 +197,14 @@
                             <value>usmn</value>
                         </property>
                         <property>
-                            <name>test.region</name>
-                            <value>usmn</value>
+                            <name>apiKeyShared</name>
+                            <value>6789</value>
                         </property>
+                        <property>
+                            <name>apiKeySecret</name>
+                            <value>abcdefghijkl</value>
+                        </property>
+
                         <property>
                             <name>test.dataCenter</name>
                             <value>usmn-1</value>
@@ -212,14 +213,15 @@
                             <name>test.machineImage</name>
                             <value>usmn-1</value>
                         </property>
+                        <!--
                         <property>
                             <name>test.product</name>
                             <value>medium</value>
                         </property>
-
+                        -->
                     </systemProperties>
                     <includes>
-                        <!-- <include>**/MockCloudTestSuite.java</include> -->
+                        <include>**/MockCloudTestSuite.java</include>
                     </includes>
                 </configuration>
             </plugin>
