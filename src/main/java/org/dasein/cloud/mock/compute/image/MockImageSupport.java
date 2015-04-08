@@ -25,6 +25,8 @@ import org.dasein.cloud.mock.MockCloud;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Implements mocked up image management services for the Dasein Cloud mock cloud.
@@ -35,6 +37,7 @@ import java.util.*;
  */
 public class MockImageSupport extends AbstractImageSupport<MockCloud> implements MachineImageSupport {
 
+    //Map<endpoint, Map<regionId, Collection<images>>>
     static private final Map<String,Map<String,Collection<MachineImage>>> customImages = new HashMap<String, Map<String, Collection<MachineImage>>>();
     static private final Map<String,Map<String,Collection<MachineImage>>> publicImages = new HashMap<String, Map<String, Collection<MachineImage>>>();
     static private final Random random = new Random();
@@ -59,11 +62,11 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
 
     static private @Nonnull Collection<MachineImage> getCustomImages(@Nonnull ProviderContext ctx) {
         synchronized( customImages ) {
-            Map<String,Collection<MachineImage>> cloud = customImages.get(ctx.getEndpoint());
+            Map<String,Collection<MachineImage>> cloud = customImages.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Collection<MachineImage>>();
-                customImages.put(ctx.getEndpoint(), cloud);
+                customImages.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Collection<MachineImage> images = cloud.get(ctx.getRegionId());
 
@@ -95,37 +98,14 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
             if( images == null ) {
                 images = new ArrayList<MachineImage>();
 
-                MachineImage img;
-
-                img = new MachineImage();
-                img.setProviderRegionId(ctx.getRegionId());
-                img.setSoftware("");
-                img.setType(MachineImageType.VOLUME);
-                img.setArchitecture(Architecture.I64);
-                img.setCurrentState(MachineImageState.ACTIVE);
-                img.setDescription("An Ubunutu VM");
-                img.setName("Ubuntu 10.04 x64");
-                img.setPlatform(Platform.UBUNTU);
-                img.setProviderMachineImageId(ctx.getRegionId() + "-1");
-                img.setProviderOwnerId("--cloud--");
-                img.setProviderRegionId(ctx.getRegionId());
-                img.setImageClass(ImageClass.MACHINE);
-                images.add(img);
-
-                img = new MachineImage();
-                img.setProviderRegionId(ctx.getRegionId());
-                img.setSoftware("");
-                img.setType(MachineImageType.VOLUME);
-                img.setArchitecture(Architecture.I64);
-                img.setCurrentState(MachineImageState.ACTIVE);
-                img.setDescription("Windows VM");
-                img.setName("Windows 2008 x64");
-                img.setPlatform(Platform.WINDOWS);
-                img.setImageClass(ImageClass.MACHINE);
-                img.setProviderMachineImageId(ctx.getRegionId() + "-2");
-                img.setProviderOwnerId("--cloud--");
-                img.setProviderRegionId(ctx.getRegionId());
-                images.add(img);
+                images.add(MachineImage
+                        .getInstance("--cloud--", ctx.getRegionId(), ctx.getRegionId() + "-1", ImageClass.MACHINE,
+                                MachineImageState.ACTIVE, "Ubuntu 10.04 x64", "An Ubunutu VM", Architecture.I64,
+                                Platform.UBUNTU));
+                images.add(MachineImage
+                        .getInstance("--cloud--", ctx.getRegionId(), ctx.getRegionId() + "-2", ImageClass.MACHINE,
+                                MachineImageState.ACTIVE, "Windows 2008 x64", "Windows VM", Architecture.I64,
+                                Platform.WINDOWS));
 
                 cloud.put(ctx.getRegionId(), Collections.unmodifiableCollection(images));
             }
@@ -172,24 +152,17 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
         if( vm == null ) {
             throw new CloudException("No such virtual machine: " + options.getVirtualMachineId());
         }
-        MachineImage image = new MachineImage();
-        String endpoint = ctx.getEndpoint();
+        String endpoint = ctx.getCloud().getEndpoint();
         String regionId = ctx.getRegionId();
 
         if( endpoint == null || regionId == null ) {
             throw new CloudException("Both endpoint and region must be set for this request");
         }
-        image.setArchitecture(Architecture.I64);
-        image.setCurrentState(MachineImageState.PENDING);
-        image.setDescription(options.getDescription());
-        image.setName(options.getName());
-        image.setPlatform(vm.getPlatform());
-        image.setProviderMachineImageId(UUID.randomUUID().toString());
-        image.setProviderOwnerId(ctx.getAccountNumber());
-        image.setProviderRegionId(ctx.getRegionId());
-        image.setSoftware("");
-        image.setImageClass(ImageClass.MACHINE);
-        image.setType(MachineImageType.VOLUME);
+
+        MachineImage image = MachineImage
+                .getInstance(ctx.getAccountNumber(), ctx.getRegionId(), UUID.randomUUID().toString(),
+                        ImageClass.MACHINE, MachineImageState.PENDING, options.getName(), options.getDescription(),
+                        Architecture.I64, vm.getPlatform());
 
         try { Thread.sleep(15000L + (random.nextInt(45) * 1000L)); }
         catch( InterruptedException ignore ) { }
@@ -258,21 +231,167 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
 //    }
 
     @Override
-    public boolean isImageSharedWithPublic(@Nonnull String machineImageId) throws CloudException, InternalException {
+    public boolean isSubscribed() throws CloudException, InternalException {
         return true;
     }
 
-    @Override
-    public boolean isSubscribed() throws CloudException, InternalException {
+    private Collection<MachineImage> filterByAccountNumber(Collection<MachineImage> machineImages,
+            String accountNumber) {
+        Collection<MachineImage> result = new ArrayList<MachineImage>();
+        for (MachineImage machineImage : machineImages) {
+            if (accountNumber.equals(machineImage.getProviderOwnerId())) {
+                result.add(machineImage);
+            }
+        }
+        return result;
+    }
+
+    private Collection<MachineImage> filterByArchitecture(Collection<MachineImage> machineImages,
+            Architecture architecture) {
+        Collection<MachineImage> result = new ArrayList<MachineImage>();
+        for (MachineImage machineImage : machineImages) {
+            if (architecture.equals(machineImage.getArchitecture())) {
+                result.add(machineImage);
+            }
+        }
+        return result;
+    }
+
+    private Collection<MachineImage> filterByImageClass(Collection<MachineImage> machineImages,
+            ImageClass imageClass) {
+        Collection<MachineImage> result = new ArrayList<MachineImage>();
+        for (MachineImage machineImage : machineImages) {
+            if (imageClass.equals(machineImage.getImageClass())) {
+                result.add(machineImage);
+            }
+        }
+        return result;
+    }
+
+    private boolean matches(MachineImage img, Platform platform) {
+        if (!platform.equals(Platform.UNKNOWN)) {
+            Platform mine = img.getPlatform();
+
+            if (platform.isWindows() && !mine.isWindows()) {
+                return false;
+            }
+            if (platform.isUnix() && !mine.isUnix()) {
+                return false;
+            }
+            if (platform.isBsd() && !mine.isBsd()) {
+                return false;
+            }
+            if (platform.isLinux() && !mine.isLinux()) {
+                return false;
+            }
+
+            if (platform.equals(Platform.UNIX)) {
+                if (!mine.isUnix()) {
+                    return false;
+                }
+            } else if (!platform.equals(mine)) {
+                return false;
+            }
+        }
         return true;
+    }
+
+    private Collection<MachineImage> filterByPlatform(Collection<MachineImage> machineImages,
+            Platform platform) {
+        Collection<MachineImage> result = new ArrayList<MachineImage>();
+        for (MachineImage machineImage : machineImages) {
+            if (matches(machineImage, platform)) {
+                result.add(machineImage);
+            }
+        }
+        return result;
+    }
+
+    private Collection<MachineImage> filterByNameRegex(Collection<MachineImage> machineImages,
+            String regex) {
+        Collection<MachineImage> result = new ArrayList<MachineImage>();
+        Pattern pattern = Pattern.compile(regex);
+        for (MachineImage machineImage : machineImages) {
+            Matcher matcher = pattern.matcher(machineImage.getName());
+            if (matcher.matches()) {
+                result.add(machineImage);
+            }
+        }
+        return result;
     }
 
     @Override
     public @Nonnull Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options)
             throws CloudException, InternalException {
-        return null;//TODO
+        ProviderContext ctx = getProvider().getContext();
+        String endpoint = ctx.getCloud().getEndpoint();
+        String regionId = ctx.getRegionId();
+
+        Map<String,Collection<MachineImage>> cloudCustomImages = customImages.get(endpoint);
+        Map<String,Collection<MachineImage>> cloudPublicImages = publicImages.get(endpoint);
+
+        Collection<MachineImage> machineImages = new ArrayList<MachineImage>();
+        if (options.getWithAllRegions()) {
+            for (Collection<MachineImage> regionCustomImages : cloudCustomImages.values()) {
+                machineImages.addAll(regionCustomImages);
+            }
+            for (Collection<MachineImage> regionPublicImages : cloudPublicImages.values()) {
+                machineImages.addAll(regionPublicImages);
+            }
+        } else {
+            Collection<MachineImage> regionCustomImages = cloudCustomImages.get(regionId);
+            Collection<MachineImage> regionPublicImages = cloudPublicImages.get(regionId);
+            if (regionCustomImages != null) {
+                machineImages.addAll(regionCustomImages);
+            }
+            if (regionPublicImages != null) {
+                machineImages.addAll(regionPublicImages);
+            }
+        }
+
+        Collection<MachineImage> result = new HashSet<MachineImage>();
+        if(options.isMatchesAny()) {
+            if (options.getAccountNumber() != null && !options.getAccountNumber().isEmpty()) {
+                result.addAll(filterByAccountNumber(machineImages, options.getAccountNumber()));
+            }
+            if (options.getArchitecture() != null) {
+                result.addAll(filterByArchitecture(machineImages, options.getArchitecture()));
+            }
+            if (options.getImageClass() != null) {
+                result.addAll(filterByImageClass(machineImages, options.getImageClass()));
+            }
+            if (options.getPlatform() != null) {
+                result.addAll(filterByPlatform(machineImages, options.getPlatform()));
+            }
+            if (options.getRegex() != null && !options.getRegex().isEmpty()) {
+                result.addAll(filterByNameRegex(machineImages, options.getRegex()));
+            }
+        } else {
+            if (options.getAccountNumber() != null && !options.getAccountNumber().isEmpty()) {
+                result = filterByAccountNumber(machineImages, options.getAccountNumber());
+            }
+            if (options.getArchitecture() != null) {
+                result = filterByArchitecture(result, options.getArchitecture());
+            }
+            if (options.getImageClass() != null) {
+                result = filterByImageClass(result, options.getImageClass());
+            }
+            if (options.getPlatform() != null) {
+                result = filterByPlatform(result, options.getPlatform());
+            }
+            if (options.getRegex() != null && !options.getRegex().isEmpty()) {
+                result = filterByNameRegex(result, options.getRegex());
+            }
+        }
+
+        return result;
     }
 
+    @Override
+    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nonnull ImageFilterOptions options)
+            throws CloudException, InternalException {
+        return listImages(options.withAccountNumber("--cloud--"));
+    }
 
     @Override
     public void remove(@Nonnull String providerImageId, boolean checkState) throws CloudException, InternalException {
@@ -282,11 +401,11 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
             throw new CloudException("No context was set for this request");
         }
         synchronized( customImages ) {
-            Map<String,Collection<MachineImage>> cloud = customImages.get(ctx.getEndpoint());
+            Map<String,Collection<MachineImage>> cloud = customImages.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Collection<MachineImage>>();
-                customImages.put(ctx.getEndpoint(), cloud);
+                customImages.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Collection<MachineImage> images = cloud.get(ctx.getRegionId());
             ArrayList<MachineImage> newImages = new ArrayList<MachineImage>();
