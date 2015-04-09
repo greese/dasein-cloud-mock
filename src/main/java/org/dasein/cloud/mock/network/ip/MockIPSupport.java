@@ -24,10 +24,12 @@ import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineSupport;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.mock.MockCloud;
+import org.dasein.cloud.mock.compute.image.MockImageCapabilities;
 import org.dasein.cloud.network.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.util.*;
 import java.util.concurrent.Future;
 
@@ -235,46 +237,55 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
     }
 
     @Override
+    @Deprecated
     public @Nonnull String getProviderTermForIpAddress(@Nonnull Locale locale) {
         return "IP Address";
     }
 
     @Override
+    @Deprecated
     public @Nonnull Requirement identifyVlanForVlanIPRequirement() throws CloudException, InternalException {
         return Requirement.NONE;
     }
 
     @Override
+    @Deprecated
     public boolean isAssigned(@Nonnull AddressType type) {
         return (type.equals(AddressType.PUBLIC));
     }
 
     @Override
+    @Deprecated
     public boolean isAssigned(@Nonnull IPVersion version) throws CloudException, InternalException {
         return true;
     }
 
     @Override
+    @Deprecated
     public boolean isAssignablePostLaunch(@Nonnull IPVersion version) throws CloudException, InternalException {
         return true;
     }
 
     @Override
+    @Deprecated
     public boolean isForwarding() {
         return false;
     }
 
     @Override
+    @Deprecated
     public boolean isForwarding(IPVersion version) throws CloudException, InternalException {
         return false;
     }
 
     @Override
+    @Deprecated
     public boolean isRequestable(@Nonnull AddressType type) {
         return type.equals(AddressType.PUBLIC);
     }
 
     @Override
+    @Deprecated
     public boolean isRequestable(@Nonnull IPVersion version) throws CloudException, InternalException {
         return true;
     }
@@ -285,12 +296,14 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
     }
 
     @Override
+    @Deprecated
     public @Nonnull Iterable<IpAddress> listPrivateIpPool(boolean unassignedOnly) throws InternalException, CloudException {
         return Collections.emptyList();
     }
 
     @Nonnull
     @Override
+    @Deprecated
     public Iterable<IpAddress> listPublicIpPool(boolean unassignedOnly) throws InternalException, CloudException {
         return listIpPool(IPVersion.IPV4, unassignedOnly);
     }
@@ -365,6 +378,7 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
     }
 
     @Override
+    @Deprecated
     public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
         ArrayList<IPVersion> versions = new ArrayList<IPVersion>();
 
@@ -444,6 +458,7 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
     }
 
     @Override
+    @Deprecated
     public @Nonnull String request(@Nonnull AddressType typeOfAddress) throws InternalException, CloudException {
         if( typeOfAddress.equals(AddressType.PRIVATE) ) {
             throw new OperationNotSupportedException("No support for private IP address requests");
@@ -477,6 +492,7 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
     }
 
     @Override
+    @Deprecated
     public boolean supportsVLANAddresses(@Nonnull IPVersion ofVersion) throws InternalException, CloudException {
         return false;
     }
@@ -496,6 +512,6 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
     @Nonnull
     @Override
     public IPAddressCapabilities getCapabilities() throws CloudException, InternalException {
-        return null;
+    	return new MockIPCapabilities(getProvider());
     }
 }
