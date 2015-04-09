@@ -18,7 +18,6 @@
 
 package org.dasein.cloud.mock.network;
 
-import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.mock.MockCloud;
 import org.dasein.cloud.mock.network.firewall.MockFirewallSupport;
 import org.dasein.cloud.mock.network.ip.MockIPSupport;
@@ -49,4 +48,5 @@ public class MockNetworkServices extends AbstractNetworkServices {
     @Override public @Nonnull IpAddressSupport getIpAddressSupport() {
         return new MockIPSupport(provider);
     }
+    
 }

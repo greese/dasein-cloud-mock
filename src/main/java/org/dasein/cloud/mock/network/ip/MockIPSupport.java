@@ -24,7 +24,6 @@ import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineSupport;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.mock.MockCloud;
-import org.dasein.cloud.mock.compute.image.MockImageCapabilities;
 import org.dasein.cloud.network.*;
 
 import javax.annotation.Nonnull;
@@ -41,11 +40,13 @@ import java.util.concurrent.Future;
  * @since 2012.09
  */
 public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implements IpAddressSupport {
+	
     static private final TreeSet<String>                                            allocatedIps  = new TreeSet<String>();
+  //Map<Cloud Endpoint, Map<Region, Map<Account, IP Collection>>>
     static private final HashMap<String,Map<String,Map<String,Collection<String>>>> allocations   = new HashMap<String, Map<String, Map<String,Collection<String>>>>();
     static private final HashMap<String,String>                                     vmAssignments = new HashMap<String, String>();
     static private final HashMap<String,String>                                     lbAssignments = new HashMap<String, String>();
-
+    
     static private int quad1 = 26;
     static private int quad2 = 0;
     static private int quad3 = 0;
@@ -91,11 +92,11 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
             } while( allocatedIps.contains(ip) );
             allocatedIps.add(ip);
 
-            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<String>>>();
-                allocations.put(ctx.getEndpoint(), cloud);
+                allocations.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String,Collection<String>> region = cloud.get(ctx.getRegionId());
 
@@ -116,14 +117,14 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
 
     static public void assignToVM(@Nonnull ProviderContext ctx, @Nonnull String ipAddress, @Nonnull VirtualMachine vm) throws CloudException {
         synchronized( allocatedIps ) {
-            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<String>>>();
-                allocations.put(ctx.getEndpoint(), cloud);
+                allocations.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String,Collection<String>> region = cloud.get(ctx.getRegionId());
-
+            
             if( region == null ) {
                 region = new HashMap<String, Collection<String>>();
                 cloud.put(ctx.getRegionId(), region);
@@ -237,75 +238,8 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
     }
 
     @Override
-    @Deprecated
-    public @Nonnull String getProviderTermForIpAddress(@Nonnull Locale locale) {
-        return "IP Address";
-    }
-
-    @Override
-    @Deprecated
-    public @Nonnull Requirement identifyVlanForVlanIPRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    @Deprecated
-    public boolean isAssigned(@Nonnull AddressType type) {
-        return (type.equals(AddressType.PUBLIC));
-    }
-
-    @Override
-    @Deprecated
-    public boolean isAssigned(@Nonnull IPVersion version) throws CloudException, InternalException {
-        return true;
-    }
-
-    @Override
-    @Deprecated
-    public boolean isAssignablePostLaunch(@Nonnull IPVersion version) throws CloudException, InternalException {
-        return true;
-    }
-
-    @Override
-    @Deprecated
-    public boolean isForwarding() {
-        return false;
-    }
-
-    @Override
-    @Deprecated
-    public boolean isForwarding(IPVersion version) throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    @Deprecated
-    public boolean isRequestable(@Nonnull AddressType type) {
-        return type.equals(AddressType.PUBLIC);
-    }
-
-    @Override
-    @Deprecated
-    public boolean isRequestable(@Nonnull IPVersion version) throws CloudException, InternalException {
-        return true;
-    }
-
-    @Override
     public boolean isSubscribed() throws CloudException, InternalException {
         return true;
-    }
-
-    @Override
-    @Deprecated
-    public @Nonnull Iterable<IpAddress> listPrivateIpPool(boolean unassignedOnly) throws InternalException, CloudException {
-        return Collections.emptyList();
-    }
-
-    @Nonnull
-    @Override
-    @Deprecated
-    public Iterable<IpAddress> listPublicIpPool(boolean unassignedOnly) throws InternalException, CloudException {
-        return listIpPool(IPVersion.IPV4, unassignedOnly);
     }
 
     @Override
@@ -317,11 +251,11 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
             throw new CloudException("No context was set for this request");
         }
         synchronized( allocatedIps ) {
-            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<String>>>();
-                allocations.put(ctx.getEndpoint(), cloud);
+                allocations.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String,Collection<String>> region = cloud.get(ctx.getRegionId());
 
@@ -378,16 +312,6 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
     }
 
     @Override
-    @Deprecated
-    public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
-        ArrayList<IPVersion> versions = new ArrayList<IPVersion>();
-
-        versions.add(IPVersion.IPV4);
-        versions.add(IPVersion.IPV6);
-        return versions;
-    }
-
-    @Override
     public void releaseFromPool(@Nonnull String ip) throws InternalException, CloudException {
         ProviderContext ctx = getProvider().getContext();
 
@@ -398,11 +322,11 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
             if( vmAssignments.containsKey(ip) || lbAssignments.containsKey(ip) ) {
                 throw new CloudException("That IP is currently assigned to a resource");
             }
-            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<String>>>();
-                allocations.put(ctx.getEndpoint(), cloud);
+                allocations.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String,Collection<String>> region = cloud.get(ctx.getRegionId());
 
@@ -432,11 +356,11 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
             if( !vmAssignments.containsKey(ip) ) {
                 throw new CloudException("That IP is not currently assigned to a resource");
             }
-            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<String>>>();
-                allocations.put(ctx.getEndpoint(), cloud);
+                allocations.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String,Collection<String>> region = cloud.get(ctx.getRegionId());
 
@@ -455,15 +379,6 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
             }
             vmAssignments.remove(ip);
         }
-    }
-
-    @Override
-    @Deprecated
-    public @Nonnull String request(@Nonnull AddressType typeOfAddress) throws InternalException, CloudException {
-        if( typeOfAddress.equals(AddressType.PRIVATE) ) {
-            throw new OperationNotSupportedException("No support for private IP address requests");
-        }
-        return request(IPVersion.IPV4);
     }
 
     @Override
@@ -489,12 +404,6 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
     @Override
     public void stopForward(@Nonnull String ruleId) throws InternalException, CloudException {
         throw new OperationNotSupportedException("IP forwarding is not supported");
-    }
-
-    @Override
-    @Deprecated
-    public boolean supportsVLANAddresses(@Nonnull IPVersion ofVersion) throws InternalException, CloudException {
-        return false;
     }
 
     @Override
