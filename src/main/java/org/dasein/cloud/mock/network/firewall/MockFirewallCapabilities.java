@@ -42,7 +42,7 @@ public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> im
     @Nonnull
     @Override
     public FirewallConstraints getFirewallConstraintsForCloud() throws InternalException, CloudException {
-        return null;
+        return FirewallConstraints.getInstance();
     }
 
     @Nonnull
@@ -54,7 +54,7 @@ public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> im
     @Nullable
     @Override
     public VisibleScope getFirewallVisibleScope() {
-        return null;
+        return VisibleScope.ACCOUNT_GLOBAL;
     }
 
     @Nonnull
@@ -71,7 +71,7 @@ public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> im
     @Nonnull
     @Override
     public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
+        if (inVlan) {
             return Collections.emptyList();
         }
         return Collections.singletonList(RuleTargetType.GLOBAL);
@@ -80,7 +80,7 @@ public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> im
     @Nonnull
     @Override
     public Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
+        if (inVlan) {
             return Collections.emptyList();
         }
         ArrayList<Direction> directions = new ArrayList<Direction>();
@@ -93,7 +93,7 @@ public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> im
     @Nonnull
     @Override
     public Iterable<Permission> listSupportedPermissions(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
+        if (inVlan) {
             return Collections.emptyList();
         }
         return Collections.singletonList(Permission.ALLOW);
@@ -108,7 +108,7 @@ public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> im
     @Nonnull
     @Override
     public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
+        if (inVlan) {
             return Collections.emptyList();
         }
         ArrayList<RuleTargetType> sources = new ArrayList<RuleTargetType>();
@@ -126,7 +126,7 @@ public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> im
     @Nonnull
     @Override
     public Requirement requiresVLAN() throws CloudException, InternalException {
-        return null;
+        return Requirement.NONE;
     }
 
     @Override
@@ -136,25 +136,23 @@ public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> im
 
     @Override
     public boolean supportsFirewallCreation(boolean inVlan) throws CloudException, InternalException {
-        return false;
+        return !inVlan;
     }
 
     @Override
     public boolean supportsFirewallDeletion() throws CloudException, InternalException {
-        return false;
+        return true;
     }
 
     @Override
     public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan, Direction direction)
             throws InternalException, CloudException {
-        // TODO Auto-generated method stub
-        return null;
+        return Collections.emptyList();
     }
 
     @Override
     public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan, Direction direction)
             throws InternalException, CloudException {
-        // TODO Auto-generated method stub
-        return null;
+        return Collections.emptyList();
     }
 }

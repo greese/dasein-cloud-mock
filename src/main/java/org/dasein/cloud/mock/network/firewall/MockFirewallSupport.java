@@ -18,10 +18,7 @@
 
 package org.dasein.cloud.mock.network.firewall;
 
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.CloudProvider;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.*;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineSupport;
@@ -132,38 +129,62 @@ public class MockFirewallSupport extends AbstractFirewallSupport<MockCloud> impl
             if( list == null ) {
                 list = new ArrayList<FirewallRule>();
                 rules.put(firewallId, list);
+            } else {
+                for(FirewallRule r : list){
+                    if(r.getProviderRuleId().equals(rule.getProviderRuleId()))
+                        throw new CloudException("trying to add a duplicated rule");
+                }
+
             }
+
             list.add(rule);
         }
         return rule.getProviderRuleId();
     }
 
     @Override
-    public @Nonnull String create(@Nonnull String name, @Nonnull String description) throws InternalException, CloudException {
+    public @Nonnull String create(@Nonnull FirewallCreateOptions options) throws InternalException, CloudException {
         ProviderContext ctx = getProvider().getContext();
+
 
         if( ctx == null ) {
             throw new CloudException("No context was specified for this request");
         }
+
+        if(!getCapabilities().supportsFirewallCreation(options.getProviderVlanId() != null)){
+            String msg = "";
+            if(options.getProviderVlanId() != null)
+                msg = "in vlan";
+            else
+                msg = "not in vlan";
+            throw new OperationNotSupportedException("not supported firewall creation " + msg);
+        }
+
         String regionId = ctx.getRegionId();
 
         if( regionId == null ) {
             throw new CloudException("No region was specified for this request");
         }
         Firewall fw = new Firewall();
+        String id = UUID.randomUUID().toString();
+        String description = options.getDescription();
+        String name = options.getName();
+        description = description == null ? "" : description;
+        name = name == null ? "MockedFireWall" : name;
 
         fw.setActive(true);
         fw.setAvailable(true);
         fw.setDescription(description);
         fw.setName(name);
-        fw.setProviderFirewallId(UUID.randomUUID().toString());
+        fw.setProviderFirewallId(id);
         fw.setRegionId(regionId);
+
         synchronized( firewalls ) {
-            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<Firewall>>>();
-                firewalls.put(ctx.getEndpoint(), cloud);
+                firewalls.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String,Collection<Firewall>> region = cloud.get(regionId);
 
@@ -177,7 +198,14 @@ public class MockFirewallSupport extends AbstractFirewallSupport<MockCloud> impl
                 account = new ArrayList<Firewall>();
                 region.put(ctx.getAccountNumber(), account);
             }
+
             account.add(fw);
+        }
+
+        if(null != options.getInitialRules()){
+            for(FirewallRuleCreateOptions option : options.getInitialRules()){
+                option.build(getProvider(), id);
+            }
         }
         //noinspection ConstantConditions
         return copy(fw).getProviderFirewallId();
@@ -215,11 +243,11 @@ public class MockFirewallSupport extends AbstractFirewallSupport<MockCloud> impl
                     }
                 }
             }
-            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<Firewall>>>();
-                firewalls.put(ctx.getEndpoint(), cloud);
+                firewalls.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String,Collection<Firewall>> region = cloud.get(regionId);
 
@@ -287,11 +315,11 @@ public class MockFirewallSupport extends AbstractFirewallSupport<MockCloud> impl
             throw new CloudException("No region was set for this request");
         }
         synchronized( firewalls ) {
-            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 create("default", "Default Firewall");
-                cloud = firewalls.get(ctx.getEndpoint());
+                cloud = firewalls.get(ctx.getCloud().getEndpoint());
                 if( cloud == null ) {
                     return Collections.emptyList();
                 }

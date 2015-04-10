@@ -863,6 +863,10 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
         vm.setProviderSubnetId(mock.subnetId);
         vm.setProviderVirtualMachineId(mock.vmId);
         vm.setProviderVlanId(mock.vlanId);
+        if(null != MockFirewallSupport.getFirewallsForVM(mock.vmId)){
+            String[] firewallIds = new String[MockFirewallSupport.getFirewallsForVM(mock.vmId).size()];
+            vm.setProviderFirewallIds(MockFirewallSupport.getFirewallsForVM(mock.vmId).toArray(firewallIds));
+        }
         vm.setPublicAddresses(new RawAddress(mock.publicIpAddress));
         vm.setRebootable(true);
         vm.setRootPassword(mock.rootPassword);
