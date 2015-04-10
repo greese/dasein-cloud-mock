@@ -43,7 +43,46 @@ import java.util.*;
  * @since 2012.09
  */
 public class MockVMSupport extends AbstractVMSupport<MockCloud> implements VirtualMachineSupport {
-    static private class MockVM {
+    
+	static class MonitorCounter {
+		
+		private /*static */int curState;
+		
+		private Random random;
+		private int threshold;
+		private double startPercent;
+		
+		public MonitorCounter (int threshold, double startPercent) {
+			this.threshold = threshold;
+			this.startPercent = startPercent;
+			random = new Random();
+			reset();
+		}
+		
+		public Boolean checkState() {
+			curState++;
+			if (random.nextInt(threshold) <= curState) {
+				return true;
+			} else {
+				return false;
+			}
+		}
+		
+		public void reset() {
+			curState = (int) (this.threshold * this.startPercent);
+		}
+
+		public int getThreshold() {
+			return threshold;
+		}
+
+		public int getCurState() {
+			return curState;
+		}
+		
+	}
+	
+	static private class MockVM {
         public String   vmId;
         public String   name;
         public String   description;
@@ -63,6 +102,10 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
         public String   rootUser;
         public String   rootPassword;
         public String   shellKey;
+		
+        public String getVmId() {
+			return vmId;
+		}
     }
 
     static private final HashMap<String,Map<String,Map<String,Collection<MockVM>>>> mockList = new HashMap<String, Map<String, Map<String, Collection<MockVM>>>>();
@@ -150,7 +193,7 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
     }
 
     static private final Random random = new Random();
-
+    static private final Map<String, MonitorCounter> monitorCounterMap = new HashMap<String, MonitorCounter>();
     static private void monitor() {
         //noinspection InfiniteLoopStatement
         while( true ) {
@@ -161,40 +204,40 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
                     for( Map.Entry<String,Map<String,Collection<MockVM>>> regions : clouds.getValue().entrySet() ) {
                         for( Map.Entry<String,Collection<MockVM>> dcs : regions.getValue().entrySet() ) {
                             for( MockVM vm : dcs.getValue() ) {
-                                switch( vm.currentState ) {
-                                    case RUNNING:
-                                        if( random.nextInt(5760) == 5 ) {
-                                            // whoops, crashed
-                                            vm.currentState = VmState.TERMINATED;
-                                            MockFirewallSupport.vmTerminated(vm.vmId);
-                                        }
-                                        break;
-                                    case PENDING:
-                                        if( random.nextInt(10) == 5 ) {
-                                            vm.currentState = VmState.RUNNING;
-                                        }
-                                        break;
-                                    case PAUSING:
-                                        if( random.nextInt(10) == 5 ) {
-                                            vm.currentState = VmState.PAUSED;
-                                        }
-                                        break;
-                                    case SUSPENDING:
-                                        if( random.nextInt(10) == 5 ) {
-                                            vm.currentState = VmState.SUSPENDED;
-                                        }
-                                        break;
-                                    case STOPPING:
-                                        if( random.nextInt(10) == 5 ) {
-                                            vm.currentState = VmState.STOPPED;
-                                        }
-                                        break;
-                                    case REBOOTING:
-                                        if( random.nextInt(10) == 5 ) {
-                                            vm.currentState = VmState.PENDING;
-                                        }
-                                        break;
-                                }
+                            	MonitorCounter monitorCounter = null;
+                            	if ((monitorCounter = monitorCounterMap.get(vm.getVmId())) == null) {
+                            		monitorCounter = new MonitorCounter(TestMonitorCounterThreshold, testMonitorCounterStartPercent);
+                            		monitorCounterMap.put(vm.getVmId(), monitorCounter);
+                            	}
+                            	if (monitorCounter.checkState()) {
+//                            		System.out.println("Check state success for vm=" + vm.getVmId() + ", " + monitorCounter.getCurState());
+	                                switch( vm.currentState ) {
+	                                    case RUNNING:
+	                                        if( random.nextInt(5760) == 5 ) {
+	                                            // whoops, crashed
+	                                            vm.currentState = VmState.TERMINATED;
+	                                            MockFirewallSupport.vmTerminated(vm.vmId);
+	                                        }
+	                                        break;
+	                                    case PENDING:
+	                                        vm.currentState = VmState.RUNNING;
+	                                        break;
+	                                    case PAUSING:
+	                                        vm.currentState = VmState.PAUSED;
+	                                        break;
+	                                    case SUSPENDING:
+	                                        vm.currentState = VmState.SUSPENDED;
+	                                        break;
+	                                    case STOPPING:
+	                                        vm.currentState = VmState.STOPPED;
+	                                        break;
+	                                    case REBOOTING:
+	                                        vm.currentState = VmState.PENDING;
+	                                        break;
+	                                }
+                            	} else {
+//                            		System.out.println("Check state failed for vm=" + vm.getVmId() + ", " + monitorCounter.getCurState());
+                            	}
                             }
                         }
                     }
@@ -382,6 +425,9 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
         if( vm == null ) {
             throw new CloudException("VM launch failed without comment");
         }
+        
+        resetCounterForVM(newVm.getVmId());
+        
         return vm;
     }
 
@@ -590,6 +636,8 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
                 throw new CloudException("The virtual machine must be running in order to be paused");
             }
             vm.currentState = VmState.PAUSING;
+            
+            resetCounterForVM(vm.getVmId());
         }
     }
 
@@ -610,6 +658,8 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
                 throw new CloudException("The virtual machine must be running in order to be rebooted");
             }
             vm.currentState = VmState.REBOOTING;
+            
+            resetCounterForVM(vm.getVmId());
         }
     }
 
@@ -630,6 +680,8 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
                 throw new CloudException("The virtual machine must be suspended in order to be resumed");
             }
             vm.currentState = VmState.PENDING;
+            
+            resetCounterForVM(vm.getVmId());
         }
     }
 
@@ -650,6 +702,8 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
                 throw new CloudException("The virtual machine must be stopped in order to be started");
             }
             vm.currentState = VmState.PENDING;
+            
+            resetCounterForVM(vm.getVmId());
         }
     }
 
@@ -670,6 +724,8 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
                 throw new CloudException("The virtual machine must be running in order to be stopped");
             }
             vm.currentState = VmState.STOPPING;
+            
+            resetCounterForVM(vm.getVmId());
         }
     }
 
@@ -690,6 +746,8 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
                 throw new CloudException("The virtual machine must be running in order to be suspended");
             }
             vm.currentState = VmState.SUSPENDING;
+            
+            resetCounterForVM(vm.getVmId());
         }
     }
 
@@ -720,6 +778,9 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
             getProvider().getNetworkServices().getIpAddressSupport().releaseFromServer(ip);
         }
         MockFirewallSupport.vmTerminated(vmId);
+        
+        //remove vm from monitoring
+        removeFromMonitorVmMap(vmId);
     }
 
     @Override
@@ -744,6 +805,8 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
                 throw new CloudException("The virtual machine must be paused in order to be unpaused");
             }
             vm.currentState = VmState.PENDING;
+            
+            resetCounterForVM(vm.getVmId());
         }
     }
 
@@ -797,5 +860,25 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
             vm.setPublicAddresses(new RawAddress(vm.getProviderAssignedIpAddressId()));
         }
         return vm;
+    }
+    
+    
+    private static int TestMonitorCounterThreshold = 100;
+    private static double testMonitorCounterStartPercent = 0.9;
+    
+    private static void resetCounterForVM(String vmId) {
+    	if (null == monitorCounterMap.get(vmId)) {
+    		monitorCounterMap.put(vmId, new MonitorCounter(TestMonitorCounterThreshold, testMonitorCounterStartPercent));
+    	} else {
+//    		System.out.println("State reset for vm " + vmId);
+    		monitorCounterMap.get(vmId).reset();
+    	}
+    }
+    
+    private static void removeFromMonitorVmMap(String vmId) {
+    	if (null != monitorCounterMap.get(vmId)) {
+//    		System.out.println("VM remove from monitoring " + vmId);
+    		monitorCounterMap.remove(vmId);
+    	}
     }
 }
