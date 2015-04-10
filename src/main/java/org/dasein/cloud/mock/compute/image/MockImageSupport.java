@@ -98,14 +98,17 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
             if( images == null ) {
                 images = new ArrayList<MachineImage>();
 
-                images.add(MachineImage
+                MachineImage machineImage1 = MachineImage
                         .getInstance("--cloud--", ctx.getRegionId(), ctx.getRegionId() + "-1", ImageClass.MACHINE,
                                 MachineImageState.ACTIVE, "Ubuntu 10.04 x64", "An Ubunutu VM", Architecture.I64,
-                                Platform.UBUNTU));
-                images.add(MachineImage
+                                Platform.UBUNTU);
+                images.add(machineImage1.sharedWithPublic());
+
+                MachineImage machineImage2 = MachineImage
                         .getInstance("--cloud--", ctx.getRegionId(), ctx.getRegionId() + "-2", ImageClass.MACHINE,
                                 MachineImageState.ACTIVE, "Windows 2008 x64", "Windows VM", Architecture.I64,
-                                Platform.WINDOWS));
+                                Platform.WINDOWS);
+                images.add(machineImage2.sharedWithPublic());
 
                 cloud.put(ctx.getRegionId(), Collections.unmodifiableCollection(images));
             }
@@ -391,6 +394,12 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
     public @Nonnull Iterable<MachineImage> searchPublicImages(@Nonnull ImageFilterOptions options)
             throws CloudException, InternalException {
         return listImages(options.withAccountNumber("--cloud--"));
+    }
+
+    @Override
+    public boolean isImageSharedWithPublic(@Nonnull String providerImageId) throws CloudException, InternalException {
+        MachineImage machineImage = getImage(providerImageId);
+        return machineImage != null && machineImage.isPublic();
     }
 
     @Override
