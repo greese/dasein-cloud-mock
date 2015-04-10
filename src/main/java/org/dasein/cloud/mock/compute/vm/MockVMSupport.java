@@ -86,6 +86,7 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
         public String   vmId;
         public String   name;
         public String   description;
+        public String   userData;
         public VmState  currentState;
         public long     created;
         public String   imageId;
@@ -293,6 +294,7 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
         newVm.vmId = getNextId(regionId);
         newVm.name = withLaunchOptions.getHostName();
         newVm.description = withLaunchOptions.getDescription();
+        newVm.userData = withLaunchOptions.getUserData();
         newVm.lastBoot = -1L;
         newVm.lastPaused = -1L;
         newVm.lastTouched = System.currentTimeMillis();
@@ -524,6 +526,24 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
             return Collections.emptyList();
         }
         return MockFirewallSupport.getFirewallsForVM(vmId);
+    }
+
+    @Override
+    public @Nullable String getUserData(@Nonnull String vmId) throws InternalException, CloudException {
+        ProviderContext ctx = getProvider().getContext();
+
+        if (ctx == null) {
+            throw new CloudException("No context was provider for this request");
+        }
+        synchronized (mockList) {
+            MockVM vm = getMockVM(ctx, vmId);
+
+            if (vm == null) {
+                throw new CloudException("No such VM: " + vmId);
+            }
+
+            return vm.userData;
+        }
     }
 
 //    private transient Collection<VirtualMachineProduct> products;
