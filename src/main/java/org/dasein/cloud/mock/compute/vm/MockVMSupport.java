@@ -32,6 +32,7 @@ import org.dasein.util.CalendarWrapper;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.util.*;
 
 /**
@@ -110,7 +111,7 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
     }
 
     static private @Nullable MockVM getMockVM(@Nonnull ProviderContext ctx, @Nonnull String vmId) {
-        String endpoint = ctx.getEndpoint();
+        String endpoint = ctx.getCloud().getEndpoint();
         String regionId = ctx.getRegionId();
 
         synchronized( mockList ) {
@@ -256,8 +257,25 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
         newVm.owner = ctx.getAccountNumber();
         newVm.currentState = VmState.PENDING;
 
-        if( !Requirement.NONE.equals(identifyPasswordRequirement()) ) {
-            if( Requirement.REQUIRED.equals(identifyPasswordRequirement()) ) {
+        String imageId = withLaunchOptions.getMachineImageId();
+
+        ComputeServices services = getProvider().getComputeServices();
+        @SuppressWarnings("ConstantConditions")
+        MachineImageSupport machineImageSupport = services.getImageSupport();
+        @SuppressWarnings("ConstantConditions")
+        MachineImage image = machineImageSupport.getImage(imageId);
+
+        if( image == null ) {
+            throw new CloudException("No such machine image: " + imageId);
+        }
+        if( !image.getCurrentState().equals(MachineImageState.ACTIVE) ) {
+            throw new CloudException("Machine image " + imageId + " is not active");
+        }
+        newVm.imageId = imageId;
+        newVm.platform = image.getPlatform();
+        
+        if( !Requirement.NONE.equals(getCapabilities().identifyPasswordRequirement(image.getPlatform())) ) {
+            if( Requirement.REQUIRED.equals(getCapabilities().identifyPasswordRequirement(image.getPlatform())) ) {
                 if( newVm.rootUser == null || newVm.rootPassword == null ) {
                     throw new CloudException("No user or password was provided for bootstrapping your VM");
                 }
@@ -265,8 +283,8 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
             newVm.rootUser = withLaunchOptions.getBootstrapUser();
             newVm.rootPassword = withLaunchOptions.getBootstrapPassword();
         }
-        if( !Requirement.NONE.equals(identifyShellKeyRequirement()) ) {
-            if( Requirement.REQUIRED.equals(identifyShellKeyRequirement()) ) {
+        if( !Requirement.NONE.equals(getCapabilities().identifyShellKeyRequirement(image.getPlatform())) ) {
+            if( Requirement.REQUIRED.equals(getCapabilities().identifyShellKeyRequirement(image.getPlatform())) ) {
                 throw new CloudException("No shell key was provided for bootstrapping your VM");
             }
             newVm.shellKey = withLaunchOptions.getBootstrapKey();
@@ -292,7 +310,7 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
             if( support == null ) {
                 throw new CloudException("This cloud does not support VLANs");
             }
-            if( support.getSubnetSupport().equals(Requirement.NONE) ) {
+            if( support.getCapabilities().getSubnetSupport().equals(Requirement.NONE) ) {
                 VLAN vlan = support.getVlan(vlanId);
 
                 if( vlan == null ) {
@@ -300,7 +318,7 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
                 }
                 newVm.vlanId = vlanId;
             }
-            else if( support.getSubnetSupport().equals(Requirement.REQUIRED) ) {
+            else if( support.getCapabilities().getSubnetSupport().equals(Requirement.REQUIRED) ) {
                 Subnet subnet = support.getSubnet(vlanId);
 
                 if( subnet == null ) {
@@ -338,27 +356,12 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
             MockFirewallSupport.saveFirewallsForVM(getProvider(), newVm.vmId, firewalls);
         }
 
-        String imageId = withLaunchOptions.getMachineImageId();
-
-        ComputeServices services = getProvider().getComputeServices();
-        @SuppressWarnings("ConstantConditions") MachineImageSupport support = services.getImageSupport();
-        @SuppressWarnings("ConstantConditions") MachineImage image = support.getImage(imageId);
-
-        if( image == null ) {
-            throw new CloudException("No such machine image: " + imageId);
-        }
-        if( !image.getCurrentState().equals(MachineImageState.ACTIVE) ) {
-            throw new CloudException("Machine image " + imageId + " is not active");
-        }
-        newVm.imageId = imageId;
-        newVm.platform = image.getPlatform();
-
         synchronized( mockList ) {
-            Map<String, Map<String, Collection<MockVM>>> cloud = mockList.get(ctx.getEndpoint());
+            Map<String, Map<String, Collection<MockVM>>> cloud = mockList.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<MockVM>>>();
-                mockList.put(ctx.getEndpoint(), cloud);
+                mockList.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String, Collection<MockVM>> region = cloud.get(regionId);
 
@@ -477,7 +480,7 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
         return MockFirewallSupport.getFirewallsForVM(vmId);
     }
 
-    private transient Collection<VirtualMachineProduct> products;
+//    private transient Collection<VirtualMachineProduct> products;
 
     //TODO:
 //    @Override
@@ -532,7 +535,7 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
-        String endpoint = ctx.getEndpoint();
+        String endpoint = ctx.getCloud().getEndpoint();
         String regionId = ctx.getRegionId();
 
         synchronized( mockList ) {
@@ -740,7 +743,7 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
             if( !vm.currentState.equals(VmState.PAUSED) ) {
                 throw new CloudException("The virtual machine must be paused in order to be unpaused");
             }
-            vm.currentState = VmState.PAUSING;
+            vm.currentState = VmState.PENDING;
         }
     }
 

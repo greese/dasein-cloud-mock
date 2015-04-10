@@ -18,10 +18,12 @@
 package org.dasein.cloud.mock.network.firewall;
 
 import org.dasein.cloud.*;
+import org.dasein.cloud.mock.MockCloud;
 import org.dasein.cloud.network.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Locale;
@@ -30,10 +32,10 @@ import java.util.Locale;
  * @author Colin Ke.
  * @since 2015.05.1
  */
-public class MockFirewallCapabilities extends AbstractCapabilities implements FirewallCapabilities {
+public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> implements FirewallCapabilities {
 
 
-    public MockFirewallCapabilities(@Nonnull CloudProvider provider) {
+    public MockFirewallCapabilities(@Nonnull MockCloud provider) {
         super(provider);
     }
 
@@ -140,5 +142,19 @@ public class MockFirewallCapabilities extends AbstractCapabilities implements Fi
     @Override
     public boolean supportsFirewallDeletion() throws CloudException, InternalException {
         return false;
+    }
+
+    @Override
+    public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan, Direction direction)
+            throws InternalException, CloudException {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan, Direction direction)
+            throws InternalException, CloudException {
+        // TODO Auto-generated method stub
+        return null;
     }
 }

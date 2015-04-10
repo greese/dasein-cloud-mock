@@ -19,8 +19,6 @@
 package org.dasein.cloud.mock;
 
 import org.dasein.cloud.test.GlobalTestSuite;
-import org.junit.Before;
-import org.junit.BeforeClass;
 
 /**
  * Verifies that the mock cloud can pass the Dasein Cloud test suite.

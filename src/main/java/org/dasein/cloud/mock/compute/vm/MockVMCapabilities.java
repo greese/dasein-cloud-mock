@@ -86,9 +86,13 @@ public class MockVMCapabilities extends AbstractCapabilities<MockCloud> implemen
     }
 
     @Override
-    public boolean canUnpause(@Nonnull VmState fromState) throws CloudException, InternalException {
-        return false;
-    }
+	public boolean canUnpause(@Nonnull VmState fromState) throws CloudException, InternalException {
+		if (VmState.PAUSED.equals(fromState)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
 
     @Override
     public int getMaximumVirtualMachineCount() throws CloudException, InternalException {
