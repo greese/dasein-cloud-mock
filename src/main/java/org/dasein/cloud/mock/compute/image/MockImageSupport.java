@@ -487,6 +487,6 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
 
     @Override
     public ImageCapabilities getCapabilities() throws CloudException, InternalException {
-        return new MockImageCapabilities(getProvider());
+        return getProvider().getCapabilitiesFactory().getCapabilities(MockImageCapabilities.class);
     }
 }

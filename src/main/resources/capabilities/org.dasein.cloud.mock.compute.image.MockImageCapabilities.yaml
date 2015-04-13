@@ -1,0 +1,18 @@
+- canBundle: {}
+- canImage: {RUNNING: true, STOPPED: true}
+- providerTermForImage: {}
+- providerTermForCustomImage: {}
+- imageVisibleScope: 
+- localBundlingRequirement: NONE
+- supportedFormats: [OVF]
+- supportedFormatsForBundling: []
+- supportedImageClasses: [MACHINE]
+- supportedImageTypes: [VOLUME]
+- supportsDirectImageUpload: false
+- supportsImageCapture: {VOLUME: true}
+- supportsImageCopy: false
+- supportsImageSharing: false
+- supportsImageSharingWithPublic: false
+- supportsListingAllRegions: false
+- supportsPublicLibrary: {MACHINE: true}
+- imageCaptureDestroysVM: false

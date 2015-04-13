@@ -23,12 +23,15 @@ package org.dasein.cloud.mock.compute.image;
 
 import org.dasein.cloud.*;
 import org.dasein.cloud.compute.*;
+import org.dasein.cloud.mock.AbstractMockCapabilities;
 import org.dasein.cloud.mock.MockCloud;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Created by Jeffrey Yan on 4/2/2015.
@@ -36,7 +39,26 @@ import java.util.Locale;
  * @author Jeffrey Yan
  * @since 2015.05.1
  */
-public class MockImageCapabilities extends AbstractCapabilities<MockCloud> implements ImageCapabilities {
+public class MockImageCapabilities extends AbstractMockCapabilities implements ImageCapabilities {
+
+    private Map<VmState, Boolean> canBundle;
+    private Map<VmState, Boolean> canImage;
+    private Map<ImageClass, String> providerTermForImage;
+    private Map<ImageClass, String> providerTermForCustomImage;
+    private VisibleScope imageVisibleScope;
+    private Requirement localBundlingRequirement;
+    private List<MachineImageFormat> supportedFormats;
+    private List<MachineImageFormat> supportedFormatsForBundling;
+    private List<ImageClass> supportedImageClasses;
+    private List<MachineImageType> supportedImageTypes;
+    private boolean supportsDirectImageUpload;
+    private Map<MachineImageType, Boolean> supportsImageCapture;
+    private boolean supportsImageCopy;
+    private boolean supportsImageSharing;
+    private boolean supportsImageSharingWithPublic;
+    private boolean supportsListingAllRegions;
+    private Map<ImageClass, Boolean> supportsPublicLibrary;
+    private boolean imageCaptureDestroysVM;
 
     public MockImageCapabilities(@Nonnull MockCloud provider) {
         super(provider);
@@ -44,99 +66,117 @@ public class MockImageCapabilities extends AbstractCapabilities<MockCloud> imple
 
     @Override
     public boolean canBundle(@Nonnull VmState fromState) throws CloudException, InternalException {
+        if (canBundle.containsKey(fromState)) {
+            return canBundle.get(fromState);
+        }
         return false;
     }
 
     @Override
     public boolean canImage(@Nonnull VmState fromState) throws CloudException, InternalException {
-        return true;
+        if (canImage.containsKey(fromState)) {
+            return canImage.get(fromState);
+        }
+        return false;
     }
 
     @Nonnull
     @Override
     public String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
-        return (cls.name().toLowerCase() + " image");
+        if (providerTermForImage != null && providerTermForImage.containsKey(cls)) {
+            return providerTermForImage.get(cls);
+        }
+        return cls.name().toLowerCase() + "image";
     }
 
     @Nonnull
     @Override
     public String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
-        return (cls.name().toLowerCase() + " image");
+        if (providerTermForCustomImage != null && providerTermForCustomImage.containsKey(cls)) {
+            return providerTermForCustomImage.get(cls);
+        }
+        return cls.name().toLowerCase() + "image";
     }
 
     @Nullable
     @Override
     public VisibleScope getImageVisibleScope() {
-        return null;
+        return imageVisibleScope;
     }
 
     @Nonnull
     @Override
     public Requirement identifyLocalBundlingRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
+        return localBundlingRequirement;
     }
 
     @Nonnull
     @Override
     public Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
-        return Collections.singletonList(MachineImageFormat.OVF);
+        return supportedFormats;
     }
 
     @Nonnull
     @Override
     public Iterable<MachineImageFormat> listSupportedFormatsForBundling() throws CloudException, InternalException {
-        return Collections.emptyList();
+        return supportedFormatsForBundling;
     }
 
     @Nonnull
     @Override
     public Iterable<ImageClass> listSupportedImageClasses() throws CloudException, InternalException {
-        return Collections.singletonList(ImageClass.MACHINE);
+        return supportedImageClasses;
     }
 
     @Nonnull
     @Override
     public Iterable<MachineImageType> listSupportedImageTypes() throws CloudException, InternalException {
-        return Collections.singletonList(MachineImageType.VOLUME);
+        return supportedImageTypes;
     }
 
     @Override
     public boolean supportsDirectImageUpload() throws CloudException, InternalException {
-        return false;
+        return supportsDirectImageUpload;
     }
 
     @Override
     public boolean supportsImageCapture(@Nonnull MachineImageType type) throws CloudException, InternalException {
-        return type.equals(MachineImageType.VOLUME);
+        if (supportsImageCapture.containsKey(type)) {
+            return supportsImageCapture.get(type);
+        }
+        return false;
     }
 
     @Override
     public boolean supportsImageCopy() throws CloudException, InternalException {
-        return false;
+        return supportsImageCopy;
     }
 
     @Override
     public boolean supportsImageSharing() throws CloudException, InternalException {
-        return false;
+        return supportsImageSharing;
     }
 
     @Override
     public boolean supportsImageSharingWithPublic() throws CloudException, InternalException {
-        return false;
+        return supportsImageSharingWithPublic;
     }
 
     @Override
     public boolean supportsListingAllRegions() throws CloudException, InternalException {
-        return false;
+        return supportsListingAllRegions;
     }
 
     @Override
     public boolean supportsPublicLibrary(@Nonnull ImageClass cls) throws CloudException, InternalException {
-        return cls.equals(ImageClass.MACHINE);
+        if (supportsPublicLibrary.containsKey(cls)) {
+            return supportsPublicLibrary.get(cls);
+        }
+        return false;
     }
 
     @Override
     public boolean imageCaptureDestroysVM() throws CloudException, InternalException {
-        return false;
+        return imageCaptureDestroysVM;
     }
 }

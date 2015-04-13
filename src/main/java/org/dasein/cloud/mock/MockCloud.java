@@ -42,7 +42,21 @@ import java.lang.reflect.InvocationTargetException;
  */
 public class MockCloud extends AbstractCloud {
 
-    public MockCloud() { }
+    private Configurator configurator;
+    private MockCapabilitiesFactory capabilitiesFactory;
+
+    public MockCloud() {
+        configurator = new Configurator(this);
+        capabilitiesFactory = new MockCapabilitiesFactory(this);
+    }
+
+    public Configurator getConfigurator() {
+        return configurator;
+    }
+
+    public MockCapabilitiesFactory getCapabilitiesFactory() {
+        return capabilitiesFactory;
+    }
 
     @Override
     public @Nonnull ComputeServices getComputeServices() {
