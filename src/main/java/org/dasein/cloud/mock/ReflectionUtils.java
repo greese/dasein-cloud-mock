@@ -67,7 +67,11 @@ public abstract class ReflectionUtils {
         } else if (String.class.isAssignableFrom(targetClz)) {
             return (T) convertToString(source);
         } else {
-            return (T) source;
+            if (source == null) {
+                return null;
+            } else {
+                return (T) source;
+            }
         }
     }
 
