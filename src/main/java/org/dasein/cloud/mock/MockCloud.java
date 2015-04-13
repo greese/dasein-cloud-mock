@@ -18,12 +18,14 @@
 
 package org.dasein.cloud.mock;
 
-import com.google.inject.Inject;
 import org.dasein.cloud.AbstractCloud;
 import org.dasein.cloud.CloudProvider;
+import org.dasein.cloud.ContextRequirements;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.dc.DataCenterServices;
+import org.dasein.cloud.mock.compute.MockComputeServices;
+import org.dasein.cloud.mock.network.MockNetworkServices;
 import org.dasein.cloud.network.NetworkServices;
 
 import javax.annotation.Nonnull;
@@ -39,84 +41,22 @@ import java.lang.reflect.InvocationTargetException;
  * @since 2012.07
  */
 public class MockCloud extends AbstractCloud {
-    @Inject
-    static private ComputeServices computeServices;
-
-    @Inject
-    static private DataCenterServices dataCenterServices;
-
-    @Inject
-    static private NetworkServices networkServices;
 
     public MockCloud() { }
 
     @Override
     public @Nonnull ComputeServices getComputeServices() {
-        try {
-            try {
-                Constructor<? extends ComputeServices> c = computeServices.getClass().getDeclaredConstructor(CloudProvider.class);
-
-                return c.newInstance(this);
-            }
-            catch( NoSuchMethodException e ) {
-                return computeServices.getClass().newInstance();
-            }
-        }
-        catch( InvocationTargetException e ) {
-            throw new RuntimeException("Unable to construct compute services: " + e.getMessage());
-        }
-        catch( InstantiationException e ) {
-            throw new RuntimeException("Unable to construct compute services: " + e.getMessage());
-        }
-        catch( IllegalAccessException e ) {
-            throw new RuntimeException("Unable to construct compute services: " + e.getMessage());
-        }
+        return new MockComputeServices(this);
     }
 
     @Override
     public @Nonnull DataCenterServices getDataCenterServices() {
-        try {
-            try {
-                Constructor<? extends DataCenterServices> c = dataCenterServices.getClass().getDeclaredConstructor(CloudProvider.class);
-
-                return c.newInstance(this);
-            }
-            catch( NoSuchMethodException e ) {
-                return dataCenterServices.getClass().newInstance();
-            }
-        }
-        catch( InvocationTargetException e ) {
-            throw new RuntimeException("Unable to construct data center services: " + e.getMessage());
-        }
-        catch( InstantiationException e ) {
-            throw new RuntimeException("Unable to construct data center services: " + e.getMessage());
-        }
-        catch( IllegalAccessException e ) {
-            throw new RuntimeException("Unable to construct data center services: " + e.getMessage());
-        }
+        return new MockDataCenterServices(this);
     }
 
     @Override
     public @Nonnull NetworkServices getNetworkServices() {
-        try {
-            try {
-                Constructor<? extends NetworkServices> c = networkServices.getClass().getDeclaredConstructor(CloudProvider.class);
-
-                return c.newInstance(this);
-            }
-            catch( NoSuchMethodException e ) {
-                return networkServices.getClass().newInstance();
-            }
-        }
-        catch( InvocationTargetException e ) {
-            throw new RuntimeException("Unable to construct network services: " + e.getMessage());
-        }
-        catch( InstantiationException e ) {
-            throw new RuntimeException("Unable to construct network services: " + e.getMessage());
-        }
-        catch( IllegalAccessException e ) {
-            throw new RuntimeException("Unable to construct network services: " + e.getMessage());
-        }
+        return new MockNetworkServices(this);
     }
 
     @Override
@@ -133,6 +73,13 @@ public class MockCloud extends AbstractCloud {
         String name = (ctx == null ? null : ctx.getProviderName());
 
         return (name == null ? "Dasein" : name);
+    }
+
+    public @Nonnull
+    ContextRequirements getContextRequirements() {
+        return new ContextRequirements(
+                new ContextRequirements.Field("apiKey", ContextRequirements.FieldType.KEYPAIR)
+        );
     }
 
     @Override
