@@ -19,6 +19,14 @@ public class MockObjectCacheManager {
 	private static Yaml yaml = new Yaml();
 	private static String prefix = "target/cache/" + (new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss")).format(new Date()) + "/";
 	
+	public static String parseCloud (String endpoint) {
+		if (endpoint.contains("://")) {
+			return endpoint.substring(endpoint.lastIndexOf("://"), endpoint.length());
+		} else {
+			return endpoint;
+		}
+	}
+	
 	public void writeObjectToCache(String name, Object object) {
 		writeObjectToCache(null, name, object);
 	}
