@@ -18,7 +18,7 @@
 
 package org.dasein.cloud.mock.network;
 
-import org.dasein.cloud.CloudProvider;
+import org.dasein.cloud.mock.MockCloud;
 import org.dasein.cloud.mock.network.firewall.MockFirewallSupport;
 import org.dasein.cloud.mock.network.ip.MockIPSupport;
 import org.dasein.cloud.network.AbstractNetworkServices;
@@ -35,19 +35,18 @@ import javax.annotation.Nonnull;
  * @since 2012.09
  */
 public class MockNetworkServices extends AbstractNetworkServices {
-    private CloudProvider provider;
+    private MockCloud provider;
 
-    public MockNetworkServices() { }
+    public MockNetworkServices(MockCloud provider) {
+        this.provider = provider;
+    }
 
-    public MockNetworkServices(CloudProvider provider) { this.provider = provider; }
-
-    @Override
-    public @Nonnull FirewallSupport getFirewallSupport() {
+    @Override public @Nonnull FirewallSupport getFirewallSupport() {
         return new MockFirewallSupport(provider);
     }
 
-    @Override
-    public @Nonnull IpAddressSupport getIpAddressSupport() {
+    @Override public @Nonnull IpAddressSupport getIpAddressSupport() {
         return new MockIPSupport(provider);
     }
+    
 }

@@ -18,36 +18,15 @@
 
 package org.dasein.cloud.mock.compute.image;
 
-import org.dasein.cloud.AsynchronousTask;
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.CloudProvider;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
-import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.Requirement;
-import org.dasein.cloud.compute.AbstractImageSupport;
-import org.dasein.cloud.compute.Architecture;
-import org.dasein.cloud.compute.ImageClass;
-import org.dasein.cloud.compute.ImageCreateOptions;
-import org.dasein.cloud.compute.ImageFilterOptions;
-import org.dasein.cloud.compute.MachineImage;
-import org.dasein.cloud.compute.MachineImageFormat;
-import org.dasein.cloud.compute.MachineImageState;
-import org.dasein.cloud.compute.MachineImageType;
-import org.dasein.cloud.compute.Platform;
-import org.dasein.cloud.compute.VirtualMachine;
-import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.*;
+import org.dasein.cloud.compute.*;
+import org.dasein.cloud.mock.MockCloud;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Implements mocked up image management services for the Dasein Cloud mock cloud.
@@ -56,9 +35,9 @@ import java.util.UUID;
  * @version 2012.09 initial version
  * @since 2012.09
  */
-public class MockImageSupport extends AbstractImageSupport {
-    private CloudProvider provider;
+public class MockImageSupport extends AbstractImageSupport<MockCloud> implements MachineImageSupport {
 
+    //Map<endpoint, Map<regionId, Collection<images>>>
     static private final Map<String,Map<String,Collection<MachineImage>>> customImages = new HashMap<String, Map<String, Collection<MachineImage>>>();
     static private final Map<String,Map<String,Collection<MachineImage>>> publicImages = new HashMap<String, Map<String, Collection<MachineImage>>>();
     static private final Random random = new Random();
@@ -83,11 +62,11 @@ public class MockImageSupport extends AbstractImageSupport {
 
     static private @Nonnull Collection<MachineImage> getCustomImages(@Nonnull ProviderContext ctx) {
         synchronized( customImages ) {
-            Map<String,Collection<MachineImage>> cloud = customImages.get(ctx.getEndpoint());
+            Map<String,Collection<MachineImage>> cloud = customImages.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Collection<MachineImage>>();
-                customImages.put(ctx.getEndpoint(), cloud);
+                customImages.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Collection<MachineImage> images = cloud.get(ctx.getRegionId());
 
@@ -119,37 +98,17 @@ public class MockImageSupport extends AbstractImageSupport {
             if( images == null ) {
                 images = new ArrayList<MachineImage>();
 
-                MachineImage img;
+                MachineImage machineImage1 = MachineImage
+                        .getInstance("--cloud--", ctx.getRegionId(), ctx.getRegionId() + "-1", ImageClass.MACHINE,
+                                MachineImageState.ACTIVE, "Ubuntu 10.04 x64", "An Ubunutu VM", Architecture.I64,
+                                Platform.UBUNTU);
+                images.add(machineImage1.sharedWithPublic());
 
-                img = new MachineImage();
-                img.setProviderRegionId(ctx.getRegionId());
-                img.setSoftware("");
-                img.setType(MachineImageType.VOLUME);
-                img.setArchitecture(Architecture.I64);
-                img.setCurrentState(MachineImageState.ACTIVE);
-                img.setDescription("An Ubunutu VM");
-                img.setName("Ubuntu 10.04 x64");
-                img.setPlatform(Platform.UBUNTU);
-                img.setProviderMachineImageId(ctx.getRegionId() + "-1");
-                img.setProviderOwnerId("--cloud--");
-                img.setProviderRegionId(ctx.getRegionId());
-                img.setImageClass(ImageClass.MACHINE);
-                images.add(img);
-
-                img = new MachineImage();
-                img.setProviderRegionId(ctx.getRegionId());
-                img.setSoftware("");
-                img.setType(MachineImageType.VOLUME);
-                img.setArchitecture(Architecture.I64);
-                img.setCurrentState(MachineImageState.ACTIVE);
-                img.setDescription("Windows VM");
-                img.setName("Windows 2008 x64");
-                img.setPlatform(Platform.WINDOWS);
-                img.setImageClass(ImageClass.MACHINE);
-                img.setProviderMachineImageId(ctx.getRegionId() + "-2");
-                img.setProviderOwnerId("--cloud--");
-                img.setProviderRegionId(ctx.getRegionId());
-                images.add(img);
+                MachineImage machineImage2 = MachineImage
+                        .getInstance("--cloud--", ctx.getRegionId(), ctx.getRegionId() + "-2", ImageClass.MACHINE,
+                                MachineImageState.ACTIVE, "Windows 2008 x64", "Windows VM", Architecture.I64,
+                                Platform.WINDOWS);
+                images.add(machineImage2.sharedWithPublic());
 
                 cloud.put(ctx.getRegionId(), Collections.unmodifiableCollection(images));
             }
@@ -157,34 +116,21 @@ public class MockImageSupport extends AbstractImageSupport {
         }
     }
 
-    public MockImageSupport(CloudProvider provider) {
+    public MockImageSupport(MockCloud provider) {
         super(provider);
-        this.provider = provider;
     }
 
-    @Override
-    public void addImageShare(@Nonnull String providerImageId, @Nonnull String accountNumber) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No sharing yet");
-    }
-
-    @Override
-    public void addPublicShare(@Nonnull String providerImageId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No sharing yet");
-    }
-
-    @Override
-    public @Nonnull String bundleVirtualMachine(@Nonnull String virtualMachineId, @Nonnull MachineImageFormat format, @Nonnull String bucket, @Nonnull String name) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No bundling yet");
-    }
-
-    @Override
-    public void bundleVirtualMachineAsync(@Nonnull String virtualMachineId, @Nonnull MachineImageFormat format, @Nonnull String bucket, @Nonnull String name, @Nonnull AsynchronousTask<String> trackingTask) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No bundling yet");
+    protected MachineImage capture(@Nonnull ImageCreateOptions options, @Nullable AsynchronousTask<MachineImage> task) throws CloudException, InternalException {
+        ProviderContext ctx = getProvider().getContext();
+        if( ctx == null ) {
+            throw new CloudException("No context was provided for this request");
+        }
+        return image(ctx, options, null);
     }
 
     @Override
     public MachineImage getImage(@Nonnull String providerImageId) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provided for this request");
@@ -203,51 +149,23 @@ public class MockImageSupport extends AbstractImageSupport {
         return null;
     }
 
-    @Override
-    public @Nonnull String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
-        return (cls.name().toLowerCase() + " image");
-    }
-
-    @Override
-    public boolean hasPublicLibrary() {
-        return true;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyLocalBundlingRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    protected @Nonnull MachineImage capture(@Nonnull ImageCreateOptions options, @Nullable AsynchronousTask<MachineImage> optionalTask) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        @SuppressWarnings("ConstantConditions") VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(options.getVirtualMachineId());
+    private @Nonnull MachineImage image(@Nonnull ProviderContext ctx, @Nonnull ImageCreateOptions options, @Nullable AsynchronousTask<MachineImage> optionalTask) throws CloudException, InternalException {
+        @SuppressWarnings("ConstantConditions") VirtualMachine vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(options.getVirtualMachineId());
 
         if( vm == null ) {
             throw new CloudException("No such virtual machine: " + options.getVirtualMachineId());
         }
-        MachineImage image = new MachineImage();
-        String endpoint = ctx.getEndpoint();
+        String endpoint = ctx.getCloud().getEndpoint();
         String regionId = ctx.getRegionId();
 
         if( endpoint == null || regionId == null ) {
             throw new CloudException("Both endpoint and region must be set for this request");
         }
-        image.setArchitecture(Architecture.I64);
-        image.setCurrentState(MachineImageState.PENDING);
-        image.setDescription(options.getDescription());
-        image.setName(options.getName());
-        image.setPlatform(vm.getPlatform());
-        image.setProviderMachineImageId(UUID.randomUUID().toString());
-        image.setProviderOwnerId(ctx.getAccountNumber());
-        image.setProviderRegionId(ctx.getRegionId());
-        image.setSoftware("");
-        image.setImageClass(ImageClass.MACHINE);
-        image.setType(MachineImageType.VOLUME);
+
+        MachineImage image = MachineImage
+                .getInstance(ctx.getAccountNumber(), ctx.getRegionId(), UUID.randomUUID().toString(),
+                        ImageClass.MACHINE, MachineImageState.PENDING, options.getName(), options.getDescription(),
+                        Architecture.I64, vm.getPlatform());
 
         try { Thread.sleep(15000L + (random.nextInt(45) * 1000L)); }
         catch( InterruptedException ignore ) { }
@@ -266,74 +184,237 @@ public class MockImageSupport extends AbstractImageSupport {
         return image;
     }
 
-    @Override
-    public boolean isImageSharedWithPublic(@Nonnull String machineImageId) throws CloudException, InternalException {
-        return true;
-    }
+    //    @Override
+    //    public @Nonnull AsynchronousTask<String> imageVirtualMachine(String vmId, String name, String description) throws CloudException, InternalException {
+    //        @SuppressWarnings("ConstantConditions") VirtualMachine vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
+    //
+    //        if( vm == null ) {
+    //            throw new CloudException("No such virtual machine: " + vmId);
+    //        }
+    //        final ImageCreateOptions options = ImageCreateOptions.getInstance(vm,  name, description);
+    //        final ProviderContext ctx = getProvider().getContext();
+    //
+    //        if( ctx == null ) {
+    //            throw new CloudException("No context was set for this request");
+    //        }
+    //
+    //        final MachineImage image = new MachineImage();
+    //
+    //        image.setArchitecture(Architecture.I64);
+    //        image.setCurrentState(MachineImageState.PENDING);
+    //        image.setDescription(description);
+    //        image.setName(name);
+    //        image.setPlatform(vm.getPlatform());
+    //        image.setProviderMachineImageId(UUID.randomUUID().toString());
+    //        image.setProviderOwnerId(ctx.getAccountNumber());
+    //        image.setProviderRegionId(ctx.getRegionId());
+    //        image.setSoftware("");
+    //        image.setType(MachineImageType.VOLUME);
+    //
+    //        final AsynchronousTask<String> task = new AsynchronousTask<String>();
+    //
+    //        Thread t = new Thread() {
+    //            public void run() {
+    //                try {
+    //                    MachineImage img = image(ctx, options, null);
+    //
+    //                    task.completeWithResult(img.getProviderMachineImageId());
+    //                }
+    //                catch( Throwable t ) {
+    //                    task.complete(t);
+    //                }
+    //
+    //            }
+    //        };
+    //
+    //        t.setName("Image Builder");
+    //        t.setDaemon(true);
+    //        t.start();
+    //        return task;
+    //    }
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
         return true;
     }
 
-    @Override
-    public @Nonnull Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options) throws CloudException, InternalException {
-        ImageClass cls = (options == null ? null : options.getImageClass());
-
-        if( cls != null && !cls.equals(ImageClass.MACHINE) ) {
-            return Collections.emptyList();
+    private Collection<MachineImage> filterByAccountNumber(Collection<MachineImage> machineImages,
+            String accountNumber) {
+        Collection<MachineImage> result = new ArrayList<MachineImage>();
+        for (MachineImage machineImage : machineImages) {
+            if (accountNumber.equals(machineImage.getProviderOwnerId())) {
+                result.add(machineImage);
+            }
         }
-        ProviderContext ctx = provider.getContext();
+        return result;
+    }
 
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
+    private Collection<MachineImage> filterByArchitecture(Collection<MachineImage> machineImages,
+            Architecture architecture) {
+        Collection<MachineImage> result = new ArrayList<MachineImage>();
+        for (MachineImage machineImage : machineImages) {
+            if (architecture.equals(machineImage.getArchitecture())) {
+                result.add(machineImage);
+            }
         }
-        String account = (options == null ? null : options.getAccountNumber());
+        return result;
+    }
 
-        if( account == null ) {
-            account = ctx.getAccountNumber();
+    private Collection<MachineImage> filterByImageClass(Collection<MachineImage> machineImages,
+            ImageClass imageClass) {
+        Collection<MachineImage> result = new ArrayList<MachineImage>();
+        for (MachineImage machineImage : machineImages) {
+            if (imageClass.equals(machineImage.getImageClass())) {
+                result.add(machineImage);
+            }
         }
-        return listMachineImagesOwnedBy(account);
+        return result;
+    }
+
+    private boolean matches(MachineImage img, Platform platform) {
+        if (!platform.equals(Platform.UNKNOWN)) {
+            Platform mine = img.getPlatform();
+
+            if (platform.isWindows() && !mine.isWindows()) {
+                return false;
+            }
+            if (platform.isUnix() && !mine.isUnix()) {
+                return false;
+            }
+            if (platform.isBsd() && !mine.isBsd()) {
+                return false;
+            }
+            if (platform.isLinux() && !mine.isLinux()) {
+                return false;
+            }
+
+            if (platform.equals(Platform.UNIX)) {
+                if (!mine.isUnix()) {
+                    return false;
+                }
+            } else if (!platform.equals(mine)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private Collection<MachineImage> filterByPlatform(Collection<MachineImage> machineImages,
+            Platform platform) {
+        Collection<MachineImage> result = new ArrayList<MachineImage>();
+        for (MachineImage machineImage : machineImages) {
+            if (matches(machineImage, platform)) {
+                result.add(machineImage);
+            }
+        }
+        return result;
+    }
+
+    private Collection<MachineImage> filterByNameRegex(Collection<MachineImage> machineImages,
+            String regex) {
+        Collection<MachineImage> result = new ArrayList<MachineImage>();
+        Pattern pattern = Pattern.compile(regex);
+        for (MachineImage machineImage : machineImages) {
+            Matcher matcher = pattern.matcher(machineImage.getName());
+            if (matcher.matches()) {
+                result.add(machineImage);
+            }
+        }
+        return result;
     }
 
     @Override
-    public @Nonnull Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
-        return Collections.singletonList(MachineImageFormat.OVF);
+    public @Nonnull Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options)
+            throws CloudException, InternalException {
+        ProviderContext ctx = getProvider().getContext();
+        String endpoint = ctx.getCloud().getEndpoint();
+        String regionId = ctx.getRegionId();
+
+        Map<String,Collection<MachineImage>> cloudCustomImages = customImages.get(endpoint);
+        Map<String,Collection<MachineImage>> cloudPublicImages = publicImages.get(endpoint);
+
+        Collection<MachineImage> machineImages = new ArrayList<MachineImage>();
+        if (options.getWithAllRegions()) {
+            for (Collection<MachineImage> regionCustomImages : cloudCustomImages.values()) {
+                machineImages.addAll(regionCustomImages);
+            }
+            for (Collection<MachineImage> regionPublicImages : cloudPublicImages.values()) {
+                machineImages.addAll(regionPublicImages);
+            }
+        } else {
+            Collection<MachineImage> regionCustomImages = cloudCustomImages.get(regionId);
+            Collection<MachineImage> regionPublicImages = cloudPublicImages.get(regionId);
+            if (regionCustomImages != null) {
+                machineImages.addAll(regionCustomImages);
+            }
+            if (regionPublicImages != null) {
+                machineImages.addAll(regionPublicImages);
+            }
+        }
+
+        Collection<MachineImage> result = new HashSet<MachineImage>();
+        if(options.isMatchesAny()) {
+            if (options.getAccountNumber() != null && !options.getAccountNumber().isEmpty()) {
+                result.addAll(filterByAccountNumber(machineImages, options.getAccountNumber()));
+            }
+            if (options.getArchitecture() != null) {
+                result.addAll(filterByArchitecture(machineImages, options.getArchitecture()));
+            }
+            if (options.getImageClass() != null) {
+                result.addAll(filterByImageClass(machineImages, options.getImageClass()));
+            }
+            if (options.getPlatform() != null) {
+                result.addAll(filterByPlatform(machineImages, options.getPlatform()));
+            }
+            if (options.getRegex() != null && !options.getRegex().isEmpty()) {
+                result.addAll(filterByNameRegex(machineImages, options.getRegex()));
+            }
+        } else {
+            if (options.getAccountNumber() != null && !options.getAccountNumber().isEmpty()) {
+                result = filterByAccountNumber(machineImages, options.getAccountNumber());
+            }
+            if (options.getArchitecture() != null) {
+                result = filterByArchitecture(result, options.getArchitecture());
+            }
+            if (options.getImageClass() != null) {
+                result = filterByImageClass(result, options.getImageClass());
+            }
+            if (options.getPlatform() != null) {
+                result = filterByPlatform(result, options.getPlatform());
+            }
+            if (options.getRegex() != null && !options.getRegex().isEmpty()) {
+                result = filterByNameRegex(result, options.getRegex());
+            }
+        }
+
+        return result;
     }
 
     @Override
-    public @Nonnull Iterable<MachineImageFormat> listSupportedFormatsForBundling() throws CloudException, InternalException {
-        return Collections.emptyList();
+    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nonnull ImageFilterOptions options)
+            throws CloudException, InternalException {
+        return listImages(options.withAccountNumber("--cloud--"));
     }
 
     @Override
-    public @Nonnull Iterable<String> listShares(@Nonnull String forMachineImageId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<ImageClass> listSupportedImageClasses() throws CloudException, InternalException {
-        return Collections.singletonList(ImageClass.MACHINE);
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImageType> listSupportedImageTypes() throws CloudException, InternalException {
-        return Collections.singletonList(MachineImageType.VOLUME);
+    public boolean isImageSharedWithPublic(@Nonnull String providerImageId) throws CloudException, InternalException {
+        MachineImage machineImage = getImage(providerImageId);
+        return machineImage != null && machineImage.isPublic();
     }
 
     @Override
     public void remove(@Nonnull String providerImageId, boolean checkState) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
         synchronized( customImages ) {
-            Map<String,Collection<MachineImage>> cloud = customImages.get(ctx.getEndpoint());
+            Map<String,Collection<MachineImage>> cloud = customImages.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Collection<MachineImage>>();
-                customImages.put(ctx.getEndpoint(), cloud);
+                customImages.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Collection<MachineImage> images = cloud.get(ctx.getRegionId());
             ArrayList<MachineImage> newImages = new ArrayList<MachineImage>();
@@ -368,7 +449,6 @@ public class MockImageSupport extends AbstractImageSupport {
         }
     }
 
-    /*
     private boolean matches(MachineImage img, @Nullable String accountNumber, @Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture) {
         if( accountNumber != null && !accountNumber.equals(img.getProviderOwnerId()) ) {
             return false;
@@ -404,100 +484,9 @@ public class MockImageSupport extends AbstractImageSupport {
         }
         return !(architecture != null && !img.getArchitecture().equals(architecture));
     }
-    */
 
     @Override
-    public @Nonnull Iterable<MachineImage> searchMachineImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture) throws CloudException, InternalException {
-        HashMap<String,MachineImage> images = new HashMap<String, MachineImage>();
-
-        for( MachineImage img : searchImages(null, keyword, platform, architecture, ImageClass.MACHINE) ) {
-            images.put(img.getProviderMachineImageId(), img);
-        }
-        for( MachineImage img : searchPublicImages(keyword, platform, architecture, ImageClass.MACHINE) ) {
-            images.put(img.getProviderMachineImageId(), img);
-        }
-        return images.values();
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> searchImages(@Nullable String accountNumber, @Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        if( imageClasses == null ) {
-            imageClasses = ImageClass.values();
-        }
-        ArrayList<MachineImage> images = new ArrayList<MachineImage>();
-        ImageFilterOptions options = null;
-
-        if( accountNumber != null ) {
-            ImageFilterOptions.getInstance().withAccountNumber(accountNumber);
-        }
-        Iterable<MachineImage> list = listImages(options);
-
-        for( MachineImage img : list ) {
-            if( img != null && matches( img, keyword, platform, architecture, imageClasses) ) {
-                images.add(img);
-            }
-        }
-        return images;
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        if( imageClasses == null || imageClasses.length < 1 ) {
-            imageClasses = ImageClass.values();
-        }
-        ArrayList<MachineImage> images = new ArrayList<MachineImage>();
-
-        for( MachineImage img : getPublicImages(ctx) ) {
-            if( img != null &&  matches(img, keyword, platform, architecture, imageClasses) ) {
-                images.add(img);
-            }
-        }
-        return images;
-    }
-
-
-    @Override
-    public boolean supportsCustomImages() {
-        return true;
-    }
-
-    @Override
-    public boolean supportsDirectImageUpload() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean supportsImageCapture(@Nonnull MachineImageType type) throws CloudException, InternalException {
-        return type.equals(MachineImageType.VOLUME);
-    }
-
-    @Override
-    public boolean supportsImageSharing() {
-        return false;
-    }
-
-    @Override
-    public boolean supportsImageSharingWithPublic() {
-        return false;
-    }
-
-    @Override
-    public boolean supportsPublicLibrary(@Nonnull ImageClass cls) throws CloudException, InternalException {
-        return cls.equals(ImageClass.MACHINE);
-    }
-
-    @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
+    public ImageCapabilities getCapabilities() throws CloudException, InternalException {
+        return getProvider().getCapabilitiesFactory().getCapabilities(MockImageCapabilities.class);
     }
 }

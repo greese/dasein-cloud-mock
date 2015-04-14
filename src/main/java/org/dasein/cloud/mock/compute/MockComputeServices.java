@@ -22,6 +22,7 @@ import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.compute.AbstractComputeServices;
 import org.dasein.cloud.compute.MachineImageSupport;
 import org.dasein.cloud.compute.VirtualMachineSupport;
+import org.dasein.cloud.mock.MockCloud;
 import org.dasein.cloud.mock.compute.image.MockImageSupport;
 import org.dasein.cloud.mock.compute.vm.MockVMSupport;
 
@@ -34,20 +35,16 @@ import javax.annotation.Nonnull;
  * @version 2012.09
  * @since 2012.09
  */
-public class MockComputeServices extends AbstractComputeServices {
-    private CloudProvider provider;
-
-    public MockComputeServices() { }
-
-    public MockComputeServices(CloudProvider provider) { this.provider = provider; }
-
-    @Override
-    public @Nonnull MachineImageSupport getImageSupport() {
-        return new MockImageSupport(provider);
+public class MockComputeServices extends AbstractComputeServices<MockCloud> {
+    public MockComputeServices(MockCloud provider) {
+        super(provider);
     }
 
-    @Override
-    public @Nonnull VirtualMachineSupport getVirtualMachineSupport() {
-        return new MockVMSupport(provider);
+    @Override public @Nonnull MachineImageSupport getImageSupport() {
+        return new MockImageSupport(getProvider());
+    }
+
+    @Override public @Nonnull VirtualMachineSupport getVirtualMachineSupport() {
+        return new MockVMSupport(getProvider());
     }
 }

@@ -18,38 +18,17 @@
 
 package org.dasein.cloud.mock.network.firewall;
 
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.CloudProvider;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
-import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.Requirement;
-import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.*;
 import org.dasein.cloud.compute.ComputeServices;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineSupport;
 import org.dasein.cloud.compute.VmState;
-import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.cloud.network.AbstractFirewallSupport;
-import org.dasein.cloud.network.Direction;
-import org.dasein.cloud.network.Firewall;
-import org.dasein.cloud.network.FirewallRule;
-import org.dasein.cloud.network.FirewallSupport;
-import org.dasein.cloud.network.NetworkServices;
-import org.dasein.cloud.network.Permission;
-import org.dasein.cloud.network.Protocol;
-import org.dasein.cloud.network.RuleTarget;
-import org.dasein.cloud.network.RuleTargetType;
+import org.dasein.cloud.mock.MockCloud;
+import org.dasein.cloud.network.*;
 
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Implements bi-directional mock firewall support.
@@ -58,7 +37,7 @@ import java.util.UUID;
  * @version 2012.09 initial version
  * @since 2012.09
  */
-public class MockFirewallSupport extends AbstractFirewallSupport {
+public class MockFirewallSupport extends AbstractFirewallSupport<MockCloud> implements FirewallSupport {
     static private final Map<String,Map<String,Map<String,Collection<Firewall>>>> firewalls = new HashMap<String, Map<String, Map<String, Collection<Firewall>>>>();
     static private final Map<String,Collection<FirewallRule>>                     rules     = new HashMap<String, Collection<FirewallRule>>();
     static private final Map<String,Collection<String>>                           vmMap     = new HashMap<String, Collection<String>>();
@@ -129,12 +108,12 @@ public class MockFirewallSupport extends AbstractFirewallSupport {
     }
     */
 
-    private CloudProvider provider;
 
-    public MockFirewallSupport(CloudProvider provider) {
+    public MockFirewallSupport(MockCloud provider) {
         super(provider);
-        this.provider = provider;
+        capabilities = new MockFirewallCapabilities(provider);
     }
+
 
     @Override
     public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull RuleTarget sourceEndpoint, @Nonnull Protocol protocol, @Nonnull RuleTarget destinationEndpoint, int beginPort, int endPort, @Nonnegative int precedence) throws CloudException, InternalException {
@@ -150,38 +129,62 @@ public class MockFirewallSupport extends AbstractFirewallSupport {
             if( list == null ) {
                 list = new ArrayList<FirewallRule>();
                 rules.put(firewallId, list);
+            } else {
+                for(FirewallRule r : list){
+                    if(r.getProviderRuleId().equals(rule.getProviderRuleId()))
+                        throw new CloudException("trying to add a duplicated rule");
+                }
+
             }
+
             list.add(rule);
         }
         return rule.getProviderRuleId();
     }
 
     @Override
-    public @Nonnull String create(@Nonnull String name, @Nonnull String description) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+    public @Nonnull String create(@Nonnull FirewallCreateOptions options) throws InternalException, CloudException {
+        ProviderContext ctx = getProvider().getContext();
+
 
         if( ctx == null ) {
             throw new CloudException("No context was specified for this request");
         }
+
+        if(!getCapabilities().supportsFirewallCreation(options.getProviderVlanId() != null)){
+            String msg = "";
+            if(options.getProviderVlanId() != null)
+                msg = "in vlan";
+            else
+                msg = "not in vlan";
+            throw new OperationNotSupportedException("not supported firewall creation " + msg);
+        }
+
         String regionId = ctx.getRegionId();
 
         if( regionId == null ) {
             throw new CloudException("No region was specified for this request");
         }
         Firewall fw = new Firewall();
+        String id = UUID.randomUUID().toString();
+        String description = options.getDescription();
+        String name = options.getName();
+        description = description == null ? "" : description;
+        name = name == null ? "MockedFireWall" : name;
 
         fw.setActive(true);
         fw.setAvailable(true);
         fw.setDescription(description);
         fw.setName(name);
-        fw.setProviderFirewallId(UUID.randomUUID().toString());
+        fw.setProviderFirewallId(id);
         fw.setRegionId(regionId);
+
         synchronized( firewalls ) {
-            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<Firewall>>>();
-                firewalls.put(ctx.getEndpoint(), cloud);
+                firewalls.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String,Collection<Firewall>> region = cloud.get(regionId);
 
@@ -195,20 +198,22 @@ public class MockFirewallSupport extends AbstractFirewallSupport {
                 account = new ArrayList<Firewall>();
                 region.put(ctx.getAccountNumber(), account);
             }
+
             account.add(fw);
+        }
+
+        if(null != options.getInitialRules()){
+            for(FirewallRuleCreateOptions option : options.getInitialRules()){
+                option.build(getProvider(), id);
+            }
         }
         //noinspection ConstantConditions
         return copy(fw).getProviderFirewallId();
     }
 
     @Override
-    public @Nonnull String createInVLAN(@Nonnull String name, @Nonnull String description, @Nonnull String providerVlanId) throws InternalException, CloudException {
-        throw new OperationNotSupportedException("VLANs not yet supported");
-    }
-
-    @Override
     public void delete(@Nonnull String firewallId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was specified for this request");
@@ -219,7 +224,7 @@ public class MockFirewallSupport extends AbstractFirewallSupport {
             throw new CloudException("No region was specified for this request");
         }
         synchronized( firewalls ) {
-            ComputeServices compute = provider.getComputeServices();
+            ComputeServices compute = getProvider().getComputeServices();
 
             if( compute != null ) {
                 VirtualMachineSupport vmSupport = compute.getVirtualMachineSupport();
@@ -238,11 +243,11 @@ public class MockFirewallSupport extends AbstractFirewallSupport {
                     }
                 }
             }
-            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<Firewall>>>();
-                firewalls.put(ctx.getEndpoint(), cloud);
+                firewalls.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String,Collection<Firewall>> region = cloud.get(regionId);
 
@@ -267,46 +272,12 @@ public class MockFirewallSupport extends AbstractFirewallSupport {
         }
     }
 
+    FirewallCapabilities capabilities;
+
+    @Nonnull
     @Override
-    public Firewall getFirewall(@Nonnull String firewallId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        String regionId = ctx.getRegionId();
-
-        if( regionId == null ) {
-            throw new CloudException("No region was set for this request");
-        }
-        synchronized( firewalls ) {
-            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getEndpoint());
-
-            if( cloud == null ) {
-                return null;
-            }
-            Map<String,Collection<Firewall>> region = cloud.get(regionId);
-
-            if( region == null ) {
-                return null;
-            }
-            Collection<Firewall> account = region.get(ctx.getAccountNumber());
-
-            if( account == null ) {
-                return null;
-            }
-            for( Firewall fw : account ) {
-                if( firewallId.equals(fw.getProviderFirewallId()) ) {
-                    return fw;
-                }
-            }
-            return null;
-        }
-    }
-
-    @Override
-    public @Nonnull String getProviderTermForFirewall(@Nonnull Locale locale) {
-        return "firewall";
+    public FirewallCapabilities getCapabilities() throws CloudException, InternalException {
+        return capabilities;
     }
 
     @Override
@@ -327,23 +298,13 @@ public class MockFirewallSupport extends AbstractFirewallSupport {
     }
 
     @Override
-    public @Nonnull Requirement identifyPrecedenceRequirement(boolean inVlan) throws InternalException, CloudException {
-        return Requirement.NONE;
-    }
-
-    @Override
     public boolean isSubscribed() throws CloudException, InternalException {
         return true;
     }
 
     @Override
-    public boolean isZeroPrecedenceHighest() throws InternalException, CloudException {
-        return true; // nonsense
-    }
-
-    @Override
     public @Nonnull Collection<Firewall> list() throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
@@ -354,11 +315,11 @@ public class MockFirewallSupport extends AbstractFirewallSupport {
             throw new CloudException("No region was set for this request");
         }
         synchronized( firewalls ) {
-            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getEndpoint());
+            Map<String,Map<String,Collection<Firewall>>> cloud = firewalls.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 create("default", "Default Firewall");
-                cloud = firewalls.get(ctx.getEndpoint());
+                cloud = firewalls.get(ctx.getCloud().getEndpoint());
                 if( cloud == null ) {
                     return Collections.emptyList();
                 }
@@ -386,57 +347,6 @@ public class MockFirewallSupport extends AbstractFirewallSupport {
     }
 
     @Override
-    public @Nonnull Iterable<ResourceStatus> listFirewallStatus() throws InternalException, CloudException {
-        ArrayList<ResourceStatus> status = new ArrayList<ResourceStatus>();
-
-        for( Firewall fw : list() ) {
-            //noinspection ConstantConditions
-            status.add(new ResourceStatus(fw.getProviderFirewallId(), true));
-        }
-        return status;
-    }
-
-    @Override
-    public @Nonnull Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        return Collections.singletonList(RuleTargetType.GLOBAL);
-    }
-
-    @Override
-    public @Nonnull Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        ArrayList<Direction> directions = new ArrayList<Direction>();
-
-        directions.add(Direction.INGRESS);
-        directions.add(Direction.EGRESS);
-        return directions;
-    }
-
-    @Override
-    public @Nonnull Iterable<Permission> listSupportedPermissions(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        return Collections.singletonList(Permission.ALLOW);
-    }
-
-    @Override
-    public @Nonnull Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        ArrayList<RuleTargetType> sources = new ArrayList<RuleTargetType>();
-
-        sources.add(RuleTargetType.CIDR);
-        sources.add(RuleTargetType.GLOBAL);
-        return sources;
-    }
-
-    @Override
     public void revoke(@Nonnull String providerFirewallRuleId) throws InternalException, CloudException {
         synchronized( firewalls ) {
             for( String fwId : rules.keySet() ) {
@@ -458,47 +368,7 @@ public class MockFirewallSupport extends AbstractFirewallSupport {
     }
 
     @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        revoke(firewallId, Direction.INGRESS, cidr, protocol, beginPort, endPort);
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        revoke(firewallId, direction, Permission.ALLOW, cidr, protocol, RuleTarget.getGlobal(firewallId), beginPort, endPort);
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        revoke(firewallId, direction, permission, source, protocol, RuleTarget.getGlobal(firewallId), beginPort, endPort);
-    }
-
-    @Override
-    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, @Nonnull RuleTarget target, int beginPort, int endPort) throws CloudException, InternalException {
-        RuleTarget sourceEndpoint, destinationEndpoint;
-
-        if( direction.equals(Direction.INGRESS) ) {
-            sourceEndpoint = RuleTarget.getCIDR(source);
-            destinationEndpoint = target;
-        }
-        else {
-            sourceEndpoint = target;
-            destinationEndpoint = RuleTarget.getCIDR(source);
-        }
-        revoke(FirewallRule.getInstance(null, firewallId, sourceEndpoint, direction, protocol, permission, destinationEndpoint, beginPort, endPort).getProviderRuleId());
-    }
-
-    @Override
-    public boolean supportsRules(@Nonnull Direction direction, @Nonnull Permission permission, boolean inVlan) throws CloudException, InternalException {
-        return (!inVlan && permission.equals(Permission.ALLOW));
-    }
-
-    @Override
     public boolean supportsFirewallSources() throws CloudException, InternalException {
         return true;
-    }
-
-    @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
     }
 }

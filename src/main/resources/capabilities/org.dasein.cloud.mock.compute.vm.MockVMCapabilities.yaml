@@ -1,0 +1,66 @@
+- canAlter: {}
+- canClone: {}
+- canPause: {}
+- canReboot: {}
+- canResume: {}
+- canStart: {}
+- canStop: {}
+- canSuspend: {}
+- canTerminate: {}
+- canUnpause: {PAUSED: true}
+
+- defaultCanAlter: false
+- defaultCanClone: false
+- defaultCanPause: true
+- defaultCanReboot: true
+- defaultCanResume: true
+- defaultCanStart: true
+- defaultCanStop: true
+- defaultCanSuspend: true
+- defaultCanTerminate: true
+- defaultCanUnpause: false
+
+
+- maximumVirtualMachineCount: 100
+- costFactor: 100
+- providerTermForVirtualMachine: "mock virtual machine"
+- verticalScalingCapabilities:
+- virtualMachineNamingConstraints:
+- virtualMachineVisibleScope:
+- virtualMachineProductVisibleScope:
+- dataCenterLaunchRequirement:
+
+- imageRequirement: {MACHINE: REQUIRED}
+- defaultImageRequirement: NONE
+
+- passwordRequirement: {WINDOWS: REQUIRED}
+- defaultPasswordRequirement: OPTIONAL
+
+- rootVolumeRequirement: NONE
+
+- shellKeyRequirement: {WINDOWS: NONE}
+- defaultShellKeyRequirement: OPTIONAL
+
+- staticIPRequirement: NONE
+- subnetRequirement:
+
+- isAPITerminationPreventable: false
+- isBasicAnalyticsSupported: false
+- isExtendedAnalyticsSupported: false
+- isUserDataSupported: true
+- isUserDefinedPrivateIPSupported: false
+- supportedArchitectures: [I64]
+- supportsSpotVirtualMachines: false
+- supportsClientRequestToken: false
+- supportsCloudStoredShellKey: false
+- isVMProductDCConstrained: false
+- supportsAlterVM: false
+- supportsClone: false
+- supportsPause: true
+- supportsReboot: true
+- supportsResume: true
+- supportsStart: true
+- supportsStop: true
+- supportsSuspend: true
+- supportsTerminate: true
+- supportsUnPause: true

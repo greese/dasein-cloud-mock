@@ -19,44 +19,21 @@
 package org.dasein.cloud.mock.compute.vm;
 
 import org.dasein.cloud.CloudException;
-import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
-import org.dasein.cloud.compute.AbstractVMSupport;
-import org.dasein.cloud.compute.Architecture;
-import org.dasein.cloud.compute.ComputeServices;
-import org.dasein.cloud.compute.ImageClass;
-import org.dasein.cloud.compute.MachineImage;
-import org.dasein.cloud.compute.MachineImageState;
-import org.dasein.cloud.compute.MachineImageSupport;
-import org.dasein.cloud.compute.Platform;
-import org.dasein.cloud.compute.VMLaunchOptions;
-import org.dasein.cloud.compute.VirtualMachine;
-import org.dasein.cloud.compute.VirtualMachineProduct;
-import org.dasein.cloud.compute.VmState;
+import org.dasein.cloud.compute.*;
 import org.dasein.cloud.dc.DataCenter;
-import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.mock.MockCloud;
 import org.dasein.cloud.mock.network.firewall.MockFirewallSupport;
 import org.dasein.cloud.mock.network.ip.MockIPSupport;
-import org.dasein.cloud.network.NetworkServices;
-import org.dasein.cloud.network.RawAddress;
-import org.dasein.cloud.network.Subnet;
-import org.dasein.cloud.network.VLAN;
-import org.dasein.cloud.network.VLANSupport;
+import org.dasein.cloud.network.*;
 import org.dasein.util.CalendarWrapper;
-import org.dasein.util.uom.storage.Gigabyte;
-import org.dasein.util.uom.storage.Storage;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Random;
+
+import java.util.*;
 
 /**
  * Implements mock virtual machine features.
@@ -65,11 +42,60 @@ import java.util.Random;
  * @version 2012.09
  * @since 2012.09
  */
-public class MockVMSupport extends AbstractVMSupport {
+public class MockVMSupport extends AbstractVMSupport<MockCloud> implements VirtualMachineSupport {
+
+    static class MonitorCounter {
+        private Random random;
+
+        private boolean counting;
+        private int threshold;
+        private int start;
+        private int count;
+
+        public MonitorCounter (int threshold, int start) {
+            this.random = new Random();
+
+            this.counting = false;
+            this.threshold = threshold;
+            this.start = start;
+        }
+
+        public void start() {
+            if(counting) {
+                throw new IllegalStateException("Counter is in counting states.");
+            }
+
+            counting = true;
+            count = start;
+        }
+
+        public boolean count() {
+            if (!counting) {
+                throw new IllegalStateException("Counter is not in counting states.");
+            }
+            count += 15;
+            if (count >= threshold) {
+                count = threshold - 1;
+            }
+            if (random.nextInt(threshold) <= count) {
+                counting = false; //stop counter
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        public boolean isCounting() {
+            return counting;
+        }
+
+    }
+
     static private class MockVM {
         public String   vmId;
         public String   name;
         public String   description;
+        public String   userData;
         public VmState  currentState;
         public long     created;
         public String   imageId;
@@ -86,6 +112,8 @@ public class MockVMSupport extends AbstractVMSupport {
         public String   rootUser;
         public String   rootPassword;
         public String   shellKey;
+
+        public MonitorCounter counter = new MonitorCounter(100, 0);
     }
 
     static private final HashMap<String,Map<String,Map<String,Collection<MockVM>>>> mockList = new HashMap<String, Map<String, Map<String, Collection<MockVM>>>>();
@@ -134,7 +162,7 @@ public class MockVMSupport extends AbstractVMSupport {
     }
 
     static private @Nullable MockVM getMockVM(@Nonnull ProviderContext ctx, @Nonnull String vmId) {
-        String endpoint = ctx.getEndpoint();
+        String endpoint = ctx.getCloud().getEndpoint();
         String regionId = ctx.getRegionId();
 
         synchronized( mockList ) {
@@ -173,7 +201,6 @@ public class MockVMSupport extends AbstractVMSupport {
     }
 
     static private final Random random = new Random();
-
     static private void monitor() {
         //noinspection InfiniteLoopStatement
         while( true ) {
@@ -184,39 +211,43 @@ public class MockVMSupport extends AbstractVMSupport {
                     for( Map.Entry<String,Map<String,Collection<MockVM>>> regions : clouds.getValue().entrySet() ) {
                         for( Map.Entry<String,Collection<MockVM>> dcs : regions.getValue().entrySet() ) {
                             for( MockVM vm : dcs.getValue() ) {
+                                if(Arrays.asList(VmState.PENDING, VmState.PAUSING, VmState.SUSPENDING, VmState.STOPPING, VmState.REBOOTING).contains(vm.currentState) && !vm.counter.isCounting()) {
+                                    vm.counter.start();
+                                }
+
                                 switch( vm.currentState ) {
-                                    case RUNNING:
-                                        if( random.nextInt(5760) == 5 ) {
-                                            // whoops, crashed
-                                            vm.currentState = VmState.TERMINATED;
-                                            MockFirewallSupport.vmTerminated(vm.vmId);
-                                        }
-                                        break;
-                                    case PENDING:
-                                        if( random.nextInt(10) == 5 ) {
-                                            vm.currentState = VmState.RUNNING;
-                                        }
-                                        break;
-                                    case PAUSING:
-                                        if( random.nextInt(10) == 5 ) {
-                                            vm.currentState = VmState.PAUSED;
-                                        }
-                                        break;
-                                    case SUSPENDING:
-                                        if( random.nextInt(10) == 5 ) {
-                                            vm.currentState = VmState.SUSPENDED;
-                                        }
-                                        break;
-                                    case STOPPING:
-                                        if( random.nextInt(10) == 5 ) {
-                                            vm.currentState = VmState.STOPPED;
-                                        }
-                                        break;
-                                    case REBOOTING:
-                                        if( random.nextInt(10) == 5 ) {
-                                            vm.currentState = VmState.PENDING;
-                                        }
-                                        break;
+                                case RUNNING:
+                                    if( random.nextInt(5760) == 5 ) {
+                                        // whoops, crashed
+                                        vm.currentState = VmState.TERMINATED;
+                                        MockFirewallSupport.vmTerminated(vm.vmId);
+                                    }
+                                    break;
+                                case PENDING:
+                                    if(vm.counter.count()) {
+                                        vm.currentState = VmState.RUNNING;
+                                    }
+                                    break;
+                                case PAUSING:
+                                    if(vm.counter.count()) {
+                                        vm.currentState = VmState.PAUSED;
+                                    }
+                                    break;
+                                case SUSPENDING:
+                                    if(vm.counter.count()) {
+                                        vm.currentState = VmState.SUSPENDED;
+                                    }
+                                    break;
+                                case STOPPING:
+                                    if(vm.counter.count()) {
+                                        vm.currentState = VmState.STOPPED;
+                                    }
+                                    break;
+                                case REBOOTING:
+                                    if(vm.counter.count()) {
+                                        vm.currentState = VmState.PENDING;
+                                    }
+                                    break;
                                 }
                             }
                         }
@@ -226,97 +257,16 @@ public class MockVMSupport extends AbstractVMSupport {
         }
     }
 
-    private CloudProvider provider;
 
-    public MockVMSupport(CloudProvider provider) {
+    public MockVMSupport(MockCloud provider) {
         super(provider);
-        this.provider = provider;
         checkMonitor();
     }
 
+    @Nonnull
     @Override
-    public int getMaximumVirtualMachineCount() throws CloudException, InternalException {
-        return 100;
-    }
-
-    @Override
-    public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
-        for( Architecture architecture : listSupportedArchitectures() ) {
-            for( VirtualMachineProduct prd : listProducts(architecture) ) {
-                if( productId.equals(prd.getProviderProductId()) ) {
-                    return prd;
-                }
-            }
-        }
-        return null;
-    }
-
-    @Override
-    public @Nonnull String getProviderTermForServer(@Nonnull Locale locale) {
-        return "virtual machine";
-    }
-
-    @Override
-    public @Nullable VirtualMachine getVirtualMachine(@Nonnull String vmId) throws InternalException, CloudException {
-        for( VirtualMachine vm : listVirtualMachines() ) {
-            if( vmId.equals(vm.getProviderVirtualMachineId()) ) {
-                return vm;
-            }
-        }
-        return null;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyImageRequirement(@Nonnull ImageClass cls) throws CloudException, InternalException {
-        return (cls.equals(ImageClass.MACHINE) ? Requirement.REQUIRED : Requirement.NONE);
-    }
-
-    @Override
-    public @Nonnull Requirement identifyPasswordRequirement(Platform platform) throws CloudException, InternalException {
-        return (platform.isWindows() ? Requirement.REQUIRED : Requirement.OPTIONAL);
-    }
-
-    @Override
-    public @Nonnull Requirement identifyRootVolumeRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyShellKeyRequirement(Platform platform) throws CloudException, InternalException {
-        return (platform.isWindows() ? Requirement.NONE : Requirement.OPTIONAL);
-    }
-
-    @Override
-    public @Nonnull Requirement identifyStaticIPRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyVlanRequirement() throws CloudException, InternalException {
-        NetworkServices network = provider.getNetworkServices();
-
-        if( network == null ) {
-            return Requirement.NONE;
-        }
-        if( network.hasVlanSupport() ) {
-            return Requirement.REQUIRED;
-        }
-        return Requirement.NONE;
-    }
-
-    @Override
-    public boolean isAPITerminationPreventable() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean isBasicAnalyticsSupported() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean isExtendedAnalyticsSupported() throws CloudException, InternalException {
-        return false;
+    public VirtualMachineCapabilities getCapabilities() throws InternalException, CloudException {
+        return new MockVMCapabilities(getProvider());
     }
 
     @Override
@@ -325,13 +275,8 @@ public class MockVMSupport extends AbstractVMSupport {
     }
 
     @Override
-    public boolean isUserDataSupported() throws CloudException, InternalException {
-        return true;
-    }
-
-    @Override
     public @Nonnull VirtualMachine launch(@Nonnull VMLaunchOptions withLaunchOptions) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provided for this request");
@@ -344,7 +289,7 @@ public class MockVMSupport extends AbstractVMSupport {
         String dcId = withLaunchOptions.getDataCenterId();
 
         if( dcId == null ) {
-            for( DataCenter dc : provider.getDataCenterServices().listDataCenters(regionId) ) {
+            for( DataCenter dc : getProvider().getDataCenterServices().listDataCenters(regionId) ) {
                 if( dc.isActive() && dc.isAvailable() ) {
                     dcId = dc.getProviderDataCenterId();
                     break;
@@ -359,6 +304,7 @@ public class MockVMSupport extends AbstractVMSupport {
         newVm.vmId = getNextId(regionId);
         newVm.name = withLaunchOptions.getHostName();
         newVm.description = withLaunchOptions.getDescription();
+        newVm.userData = withLaunchOptions.getUserData();
         newVm.lastBoot = -1L;
         newVm.lastPaused = -1L;
         newVm.lastTouched = System.currentTimeMillis();
@@ -368,9 +314,11 @@ public class MockVMSupport extends AbstractVMSupport {
 
         String imageId = withLaunchOptions.getMachineImageId();
 
-        ComputeServices services = provider.getComputeServices();
-        @SuppressWarnings("ConstantConditions") MachineImageSupport support = services.getImageSupport();
-        @SuppressWarnings("ConstantConditions") MachineImage image = support.getImage(imageId);
+        ComputeServices services = getProvider().getComputeServices();
+        @SuppressWarnings("ConstantConditions")
+        MachineImageSupport machineImageSupport = services.getImageSupport();
+        @SuppressWarnings("ConstantConditions")
+        MachineImage image = machineImageSupport.getImage(imageId);
 
         if( image == null ) {
             throw new CloudException("No such machine image: " + imageId);
@@ -381,8 +329,8 @@ public class MockVMSupport extends AbstractVMSupport {
         newVm.imageId = imageId;
         newVm.platform = image.getPlatform();
 
-        if( !Requirement.NONE.equals(identifyPasswordRequirement(newVm.platform)) ) {
-            if( Requirement.REQUIRED.equals(identifyPasswordRequirement(newVm.platform)) ) {
+        if( !Requirement.NONE.equals(getCapabilities().identifyPasswordRequirement(image.getPlatform())) ) {
+            if( Requirement.REQUIRED.equals(getCapabilities().identifyPasswordRequirement(image.getPlatform())) ) {
                 if( newVm.rootUser == null || newVm.rootPassword == null ) {
                     throw new CloudException("No user or password was provided for bootstrapping your VM");
                 }
@@ -390,8 +338,8 @@ public class MockVMSupport extends AbstractVMSupport {
             newVm.rootUser = withLaunchOptions.getBootstrapUser();
             newVm.rootPassword = withLaunchOptions.getBootstrapPassword();
         }
-        if( !Requirement.NONE.equals(identifyShellKeyRequirement(newVm.platform)) ) {
-            if( Requirement.REQUIRED.equals(identifyShellKeyRequirement(newVm.platform)) ) {
+        if( !Requirement.NONE.equals(getCapabilities().identifyShellKeyRequirement(image.getPlatform())) ) {
+            if( Requirement.REQUIRED.equals(getCapabilities().identifyShellKeyRequirement(image.getPlatform())) ) {
                 throw new CloudException("No shell key was provided for bootstrapping your VM");
             }
             newVm.shellKey = withLaunchOptions.getBootstrapKey();
@@ -407,26 +355,26 @@ public class MockVMSupport extends AbstractVMSupport {
         String vlanId = withLaunchOptions.getVlanId();
 
         if( vlanId != null ) {
-            NetworkServices network = provider.getNetworkServices();
+            NetworkServices network = getProvider().getNetworkServices();
 
             if( network == null ) {
                 throw new CloudException("This cloud does not support network services");
             }
-            VLANSupport vSupport = network.getVlanSupport();
+            VLANSupport support = network.getVlanSupport();
 
-            if( vSupport == null ) {
+            if( support == null ) {
                 throw new CloudException("This cloud does not support VLANs");
             }
-            if( vSupport.getSubnetSupport().equals(Requirement.NONE) ) {
-                VLAN vlan = vSupport.getVlan(vlanId);
+            if( support.getCapabilities().getSubnetSupport().equals(Requirement.NONE) ) {
+                VLAN vlan = support.getVlan(vlanId);
 
                 if( vlan == null ) {
                     throw new CloudException("No such VLAN: " + vlanId);
                 }
                 newVm.vlanId = vlanId;
             }
-            else if( vSupport.getSubnetSupport().equals(Requirement.REQUIRED) ) {
-                Subnet subnet = vSupport.getSubnet(vlanId);
+            else if( support.getCapabilities().getSubnetSupport().equals(Requirement.REQUIRED) ) {
+                Subnet subnet = support.getSubnet(vlanId);
 
                 if( subnet == null ) {
                     throw new CloudException("No such subnet: " + vlanId);
@@ -435,11 +383,11 @@ public class MockVMSupport extends AbstractVMSupport {
                 newVm.vlanId = subnet.getProviderVlanId();
             }
             else {
-                Subnet subnet = vSupport.getSubnet(vlanId);
+                Subnet subnet = support.getSubnet(vlanId);
                 VLAN vlan;
 
                 if( subnet == null ) {
-                    vlan = vSupport.getVlan(vlanId);
+                    vlan = support.getVlan(vlanId);
                     if( vlan == null ) {
                         throw new CloudException("No such VLAN or subnet: " + vlanId);
                     }
@@ -460,15 +408,15 @@ public class MockVMSupport extends AbstractVMSupport {
         String[] firewalls = withLaunchOptions.getFirewallIds();
 
         if( firewalls.length > 0 ) {
-            MockFirewallSupport.saveFirewallsForVM(provider, newVm.vmId, firewalls);
+            MockFirewallSupport.saveFirewallsForVM(getProvider(), newVm.vmId, firewalls);
         }
 
         synchronized( mockList ) {
-            Map<String, Map<String, Collection<MockVM>>> cloud = mockList.get(ctx.getEndpoint());
+            Map<String, Map<String, Collection<MockVM>>> cloud = mockList.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
                 cloud = new HashMap<String, Map<String, Collection<MockVM>>>();
-                mockList.put(ctx.getEndpoint(), cloud);
+                mockList.put(ctx.getCloud().getEndpoint(), cloud);
             }
             Map<String, Collection<MockVM>> region = cloud.get(regionId);
 
@@ -489,8 +437,91 @@ public class MockVMSupport extends AbstractVMSupport {
         if( vm == null ) {
             throw new CloudException("VM launch failed without comment");
         }
+
         return vm;
     }
+
+    //    @Override
+    //    public @Nonnull VirtualMachine launch(@Nonnull String imageId, @Nonnull VirtualMachineProduct product, @Nullable String inZoneId, @Nonnull String name, @Nonnull String description, @Nullable String keypair, @Nullable String inVlanId, boolean withMonitoring, boolean asSandbox, @Nullable String... firewallIds) throws InternalException, CloudException {
+    //        VMLaunchOptions cfg = VMLaunchOptions.getInstance(product.getProviderProductId(), imageId, name, description);
+    //
+    //        if( keypair != null ) {
+    //            cfg.withBoostrapKey(keypair);
+    //        }
+    //        if( inVlanId != null ) {
+    //            if( inZoneId == null ) {
+    //                NetworkServices svc = getProvider().getNetworkServices();
+    //
+    //                if( svc != null ) {
+    //                    VLANSupport support = svc.getVlanSupport();
+    //
+    //                    if( support != null ) {
+    //                        Subnet subnet = support.getSubnet(inVlanId);
+    //
+    //                        if( subnet == null ) {
+    //                            throw new CloudException("No such VPC subnet: " + inVlanId);
+    //                        }
+    //                        inZoneId = subnet.getProviderDataCenterId();
+    //                    }
+    //                }
+    //            }
+    //            if( inZoneId == null ) {
+    //                throw new CloudException("Unable to match zone to subnet");
+    //            }
+    //            cfg.inVlan(null, inZoneId, inVlanId);
+    //        }
+    //        else if( inZoneId != null ) {
+    //            cfg.inDataCenter(inZoneId);
+    //        }
+    //        if( withMonitoring ) {
+    //            cfg.withExtendedAnalytics();
+    //        }
+    //        if( firewallIds != null && firewallIds.length > 0 ) {
+    //            cfg.behindFirewalls(firewallIds);
+    //        }
+    //        return launch(cfg);
+    //    }
+
+    //    @Override
+    //    public @Nonnull VirtualMachine launch(@Nonnull String imageId, @Nonnull VirtualMachineProduct product, @Nullable String inZoneId, @Nonnull String name, @Nonnull String description, @Nullable String keypair, @Nullable String inVlanId, boolean withMonitoring, boolean asSandbox, @Nullable String[] firewallIds, @Nullable Tag... tags) throws InternalException, CloudException {
+    //        VMLaunchOptions cfg = VMLaunchOptions.getInstance(product.getProviderProductId(), imageId, name, description);
+    //
+    //        if( keypair != null ) {
+    //            cfg.withBoostrapKey(keypair);
+    //        }
+    //        if( inVlanId != null ) {
+    //            if( inZoneId == null ) {
+    //                NetworkServices svc = getProvider().getNetworkServices();
+    //
+    //                if( svc != null ) {
+    //                    VLANSupport support = svc.getVlanSupport();
+    //
+    //                    if( support != null ) {
+    //                        Subnet subnet = support.getSubnet(inVlanId);
+    //
+    //                        if( subnet == null ) {
+    //                            throw new CloudException("No such VPC subnet: " + inVlanId);
+    //                        }
+    //                        inZoneId = subnet.getProviderDataCenterId();
+    //                    }
+    //                }
+    //            }
+    //            if( inZoneId == null ) {
+    //                throw new CloudException("Unable to match zone to subnet");
+    //            }
+    //            cfg.inVlan(null, inZoneId, inVlanId);
+    //        }
+    //        else if( inZoneId != null ) {
+    //            cfg.inDataCenter(inZoneId);
+    //        }
+    //        if( withMonitoring ) {
+    //            cfg.withExtendedAnalytics();
+    //        }
+    //        if( firewallIds != null && firewallIds.length > 0 ) {
+    //            cfg.behindFirewalls(firewallIds);
+    //        }
+    //        return launch(cfg);
+    //    }
 
     @Override
     public @Nonnull Iterable<String> listFirewalls(@Nonnull String vmId) throws InternalException, CloudException {
@@ -505,66 +536,80 @@ public class MockVMSupport extends AbstractVMSupport {
         return MockFirewallSupport.getFirewallsForVM(vmId);
     }
 
-    private transient Collection<VirtualMachineProduct> products;
-
     @Override
-    public @Nonnull Iterable<VirtualMachineProduct> listProducts(Architecture architecture) throws InternalException, CloudException {
-        if( !architecture.equals(Architecture.I64) ) {
-            return Collections.emptyList();
+    public @Nullable String getUserData(@Nonnull String vmId) throws InternalException, CloudException {
+        ProviderContext ctx = getProvider().getContext();
+
+        if (ctx == null) {
+            throw new CloudException("No context was provider for this request");
         }
-        if( products == null ) {
-            ArrayList<VirtualMachineProduct> list = new ArrayList<VirtualMachineProduct>();
+        synchronized (mockList) {
+            MockVM vm = getMockVM(ctx, vmId);
 
-            VirtualMachineProduct p;
+            if (vm == null) {
+                throw new CloudException("No such VM: " + vmId);
+            }
 
-            p = new VirtualMachineProduct();
-            p.setDescription("1 GB RAM/1 CPU/20 GB Disk");
-            p.setName("Small");
-            p.setCpuCount(1);
-            p.setProviderProductId("small");
-            p.setRamSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
-            p.setRootVolumeSize(new Storage<Gigabyte>(20, Storage.GIGABYTE));
-            p.setStandardHourlyRate(0.10f);
-            list.add(p);
-
-            p = new VirtualMachineProduct();
-            p.setDescription("4 GB RAM/2 CPU/40 GB Disk");
-            p.setName("Medium");
-            p.setCpuCount(2);
-            p.setProviderProductId("medium");
-            p.setRamSize(new Storage<Gigabyte>(4, Storage.GIGABYTE));
-            p.setRootVolumeSize(new Storage<Gigabyte>(40, Storage.GIGABYTE));
-            p.setStandardHourlyRate(0.15f);
-            list.add(p);
-
-            p = new VirtualMachineProduct();
-            p.setDescription("8 GB RAM/4 CPU/80 GB Disk");
-            p.setName("Large");
-            p.setCpuCount(4);
-            p.setProviderProductId("large");
-            p.setRamSize(new Storage<Gigabyte>(8, Storage.GIGABYTE));
-            p.setRootVolumeSize(new Storage<Gigabyte>(80, Storage.GIGABYTE));
-            p.setStandardHourlyRate(0.25f);
-            list.add(p);
-
-            products = Collections.unmodifiableList(list);
+            return vm.userData;
         }
-        return products;
     }
 
-    @Override
-    public @Nonnull Iterable<Architecture> listSupportedArchitectures() throws InternalException, CloudException {
-        return Collections.singletonList(Architecture.I64);
-    }
+    //    private transient Collection<VirtualMachineProduct> products;
+
+    //TODO:
+    //    @Override
+    //    public @Nonnull Iterable<VirtualMachineProduct> listProducts(Architecture architecture) throws InternalException, CloudException {
+    //        if( !architecture.equals(Architecture.I64) ) {
+    //            return Collections.emptyList();
+    //        }
+    //        if( products == null ) {
+    //            ArrayList<VirtualMachineProduct> list = new ArrayList<VirtualMachineProduct>();
+    //
+    //            VirtualMachineProduct p;
+    //
+    //            p = new VirtualMachineProduct();
+    //            p.setDescription("1 GB RAM/1 CPU/20 GB Disk");
+    //            p.setName("Small");
+    //            p.setCpuCount(1);
+    //            p.setProviderProductId("small");
+    //            p.setRamSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
+    //            p.setRootVolumeSize(new Storage<Gigabyte>(20, Storage.GIGABYTE));
+    //            p.setStandardHourlyRate(0.10f);
+    //            list.add(p);
+    //
+    //            p = new VirtualMachineProduct();
+    //            p.setDescription("4 GB RAM/2 CPU/40 GB Disk");
+    //            p.setName("Medium");
+    //            p.setCpuCount(2);
+    //            p.setProviderProductId("medium");
+    //            p.setRamSize(new Storage<Gigabyte>(4, Storage.GIGABYTE));
+    //            p.setRootVolumeSize(new Storage<Gigabyte>(40, Storage.GIGABYTE));
+    //            p.setStandardHourlyRate(0.15f);
+    //            list.add(p);
+    //
+    //            p = new VirtualMachineProduct();
+    //            p.setDescription("8 GB RAM/4 CPU/80 GB Disk");
+    //            p.setName("Large");
+    //            p.setCpuCount(4);
+    //            p.setProviderProductId("large");
+    //            p.setRamSize(new Storage<Gigabyte>(8, Storage.GIGABYTE));
+    //            p.setRootVolumeSize(new Storage<Gigabyte>(80, Storage.GIGABYTE));
+    //            p.setStandardHourlyRate(0.25f);
+    //            list.add(p);
+    //
+    //            products = Collections.unmodifiableList(list);
+    //        }
+    //        return products;
+    //    }
 
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
-        String endpoint = ctx.getEndpoint();
+        String endpoint = ctx.getCloud().getEndpoint();
         String regionId = ctx.getRegionId();
 
         synchronized( mockList ) {
@@ -604,7 +649,7 @@ public class MockVMSupport extends AbstractVMSupport {
 
     @Override
     public void pause(@Nonnull String vmId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provider for this request");
@@ -624,7 +669,7 @@ public class MockVMSupport extends AbstractVMSupport {
 
     @Override
     public void reboot(@Nonnull String vmId) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provider for this request");
@@ -644,7 +689,7 @@ public class MockVMSupport extends AbstractVMSupport {
 
     @Override
     public void resume(@Nonnull String vmId) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provider for this request");
@@ -664,7 +709,7 @@ public class MockVMSupport extends AbstractVMSupport {
 
     @Override
     public void start(@Nonnull String vmId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provider for this request");
@@ -684,7 +729,7 @@ public class MockVMSupport extends AbstractVMSupport {
 
     @Override
     public void stop(@Nonnull String vmId, boolean force) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provider for this request");
@@ -703,23 +748,8 @@ public class MockVMSupport extends AbstractVMSupport {
     }
 
     @Override
-    public boolean supportsPauseUnpause(@Nonnull VirtualMachine vm) {
-        return true;
-    }
-
-    @Override
-    public boolean supportsStartStop(@Nonnull VirtualMachine vm) {
-        return true;
-    }
-
-    @Override
-    public boolean supportsSuspendResume(@Nonnull VirtualMachine vm) {
-        return true;
-    }
-
-    @Override
     public void suspend(@Nonnull String vmId) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provider for this request");
@@ -739,7 +769,7 @@ public class MockVMSupport extends AbstractVMSupport {
 
     @Override
     public void terminate(@Nonnull String vmId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provider for this request");
@@ -761,14 +791,19 @@ public class MockVMSupport extends AbstractVMSupport {
         }
         if( ip != null ) {
             //noinspection ConstantConditions
-            provider.getNetworkServices().getIpAddressSupport().releaseFromServer(ip);
+            getProvider().getNetworkServices().getIpAddressSupport().releaseFromServer(ip);
         }
         MockFirewallSupport.vmTerminated(vmId);
     }
 
     @Override
+    public void terminate(@Nonnull String vmId, @Nullable String explanation) throws InternalException, CloudException {
+
+    }
+
+    @Override
     public void unpause(@Nonnull String vmId) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was provider for this request");
@@ -782,13 +817,8 @@ public class MockVMSupport extends AbstractVMSupport {
             if( !vm.currentState.equals(VmState.PAUSED) ) {
                 throw new CloudException("The virtual machine must be paused in order to be unpaused");
             }
-            vm.currentState = VmState.PAUSING;
+            vm.currentState = VmState.PENDING;
         }
-    }
-
-    @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
     }
 
     private @Nullable VirtualMachine toVM(@Nonnull String dcId, @Nullable MockVM mock) throws CloudException {
@@ -798,7 +828,7 @@ public class MockVMSupport extends AbstractVMSupport {
         if( mock.currentState.equals(VmState.TERMINATED) && ((System.currentTimeMillis() - mock.lastTouched) > (CalendarWrapper.MINUTE*10L)) ) {
             return null;
         }
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
@@ -824,6 +854,10 @@ public class MockVMSupport extends AbstractVMSupport {
         vm.setProviderSubnetId(mock.subnetId);
         vm.setProviderVirtualMachineId(mock.vmId);
         vm.setProviderVlanId(mock.vlanId);
+        if(null != MockFirewallSupport.getFirewallsForVM(mock.vmId)){
+            String[] firewallIds = new String[MockFirewallSupport.getFirewallsForVM(mock.vmId).size()];
+            vm.setProviderFirewallIds(MockFirewallSupport.getFirewallsForVM(mock.vmId).toArray(firewallIds));
+        }
         vm.setPublicAddresses(new RawAddress(mock.publicIpAddress));
         vm.setRebootable(true);
         vm.setRootPassword(mock.rootPassword);
