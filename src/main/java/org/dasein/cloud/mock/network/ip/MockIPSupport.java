@@ -24,6 +24,7 @@ import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineSupport;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.mock.MockCloud;
+import org.dasein.cloud.mock.MockObjectCacheManager;
 import org.dasein.cloud.network.*;
 
 import javax.annotation.Nonnull;
@@ -41,12 +42,8 @@ import java.util.concurrent.Future;
  */
 public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implements IpAddressSupport {
 	
-    static private final TreeSet<String>                                            allocatedIps  = new TreeSet<String>();
-  //Map<Cloud Endpoint, Map<Region, Map<Account, IP Collection>>>
-    static private final HashMap<String,Map<String,Map<String,Collection<String>>>> allocations   = new HashMap<String, Map<String, Map<String,Collection<String>>>>();
-    static private final HashMap<String,String>                                     vmAssignments = new HashMap<String, String>();
-    static private final HashMap<String,String>                                     lbAssignments = new HashMap<String, String>();
-    
+	static private final byte[] allocatedIpsLock = new byte[0];
+	
     static private int quad1 = 26;
     static private int quad2 = 0;
     static private int quad3 = 0;
@@ -54,10 +51,16 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
 
     static private final Random random = new Random();
 
+    static private MockObjectCacheManager mockObjectCacheManager = new MockObjectCacheManager();
+    
     static private @Nonnull String allocate(@Nonnull ProviderContext ctx, IPVersion version) throws CloudException {
-        synchronized( allocatedIps ) {
+    	Set<String>  allocatedIps = null;
+    	synchronized(allocatedIpsLock) {
+    		allocatedIps = (Set<String>) mockObjectCacheManager.readObjectFromCache("allocatedIps");
+    		if (allocatedIps == null) {
+    			allocatedIps = new TreeSet<String>();
+    		}
             String ip;
-
             do {
                 if( version.equals(IPVersion.IPV4) ) {
                     quad4++;
@@ -92,6 +95,12 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
             } while( allocatedIps.contains(ip) );
             allocatedIps.add(ip);
 
+            HashMap<String,Map<String,Map<String,Collection<String>>>> allocations = 
+            		(HashMap<String, Map<String, Map<String, Collection<String>>>>) 
+            		mockObjectCacheManager.readObjectFromCache("allocations");
+            if (allocations == null) {
+            	allocations = new HashMap<String,Map<String,Map<String,Collection<String>>>>();
+            }
             Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
@@ -111,12 +120,20 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
                 region.put(ctx.getEffectiveAccountNumber(), account);
             }
             account.add(ip);
+            mockObjectCacheManager.writeObjectToCache("allocations", allocations);
+            mockObjectCacheManager.writeObjectToCache("allocatedIps", allocatedIps);
             return ip;
         }
     }
 
     static public void assignToVM(@Nonnull ProviderContext ctx, @Nonnull String ipAddress, @Nonnull VirtualMachine vm) throws CloudException {
-        synchronized( allocatedIps ) {
+    	synchronized(allocatedIpsLock) {
+    		HashMap<String,Map<String,Map<String,Collection<String>>>> allocations = 
+            		(HashMap<String, Map<String, Map<String, Collection<String>>>>) 
+            		mockObjectCacheManager.readObjectFromCache("allocations");
+            if (allocations == null) {
+            	allocations = new HashMap<String,Map<String,Map<String,Collection<String>>>>();
+            }
             Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
@@ -140,17 +157,21 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
             }
 
             String current = null;
-
-            for( Map.Entry<String,String> entry : vmAssignments.entrySet() ) {
-                if( entry.getKey().equals(ipAddress) ) {
-                    throw new CloudException("IP address is already assigned");
-                }
-                if( entry.getValue().equals(vm.getProviderVirtualMachineId()) ) {
-                    current = entry.getKey();
-                }
+            HashMap<String,String> vmAssignments = (HashMap<String, String>) mockObjectCacheManager.readObjectFromCache("vmAssignments");
+            if (vmAssignments == null) {
+            	vmAssignments = new HashMap<String,String>();	
             }
+	            for( Map.Entry<String,String> entry : vmAssignments.entrySet() ) {
+	                if( entry.getKey().equals(ipAddress) ) {
+	                    throw new CloudException("IP address is already assigned");
+	                }
+	                if( entry.getValue().equals(vm.getProviderVirtualMachineId()) ) {
+	                    current = entry.getKey();
+	                }
+	            }
             if( current == null ) {
-                if( lbAssignments.containsKey(ipAddress) ) {
+            	HashMap<String,String> lbAssignments = (HashMap<String, String>) mockObjectCacheManager.readObjectFromCache("lbAssignments");
+            	if( lbAssignments != null && lbAssignments.containsKey(ipAddress) ) {
                     throw new CloudException("IP address is already assigned");
                 }
             }
@@ -158,26 +179,33 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
             if( current != null ) {
                 vmAssignments.remove(current);
             }
-        }
+            mockObjectCacheManager.writeObjectToCache("vmAssignments", vmAssignments);
+    	}
     }
 
     static public @Nullable String getIPAddressForVM(@Nonnull String vmId) {
-        synchronized( allocatedIps ) {
-            for( Map.Entry<String,String> entry : vmAssignments.entrySet() ) {
-                if( entry.getValue().equals(vmId) ) {
-                    return entry.getKey();
-                }
+        synchronized(allocatedIpsLock) {
+            HashMap<String,String> vmAssignments = (HashMap<String, String>) mockObjectCacheManager.readObjectFromCache("vmAssignments");
+            if (vmAssignments != null) {
+	            for( Map.Entry<String,String> entry : vmAssignments.entrySet() ) {
+	                if( entry.getValue().equals(vmId) ) {
+	                    return entry.getKey();
+	                }
+	            }
             }
         }
         return null;
     }
 
     static public @Nullable String getIPAddressForLB(@Nonnull String lbId) {
-        synchronized( allocatedIps ) {
-            for( Map.Entry<String,String> entry : lbAssignments.entrySet() ) {
-                if( entry.getValue().equals(lbId) ) {
-                    return entry.getKey();
-                }
+    	synchronized(allocatedIpsLock) {
+            HashMap<String,String> lbAssignments = (HashMap<String, String>) mockObjectCacheManager.readObjectFromCache("lbAssignments");
+            if (lbAssignments != null) {
+	            for( Map.Entry<String,String> entry : lbAssignments.entrySet() ) {
+	                if( entry.getValue().equals(lbId) ) {
+	                    return entry.getKey();
+	                }
+	            }
             }
         }
         return null;
@@ -250,7 +278,13 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
-        synchronized( allocatedIps ) {
+        synchronized(allocatedIpsLock) {
+        	HashMap<String,Map<String,Map<String,Collection<String>>>> allocations = 
+            		(HashMap<String, Map<String, Map<String, Collection<String>>>>) 
+            		mockObjectCacheManager.readObjectFromCache("allocations");
+            if (allocations == null) {
+            	allocations = new HashMap<String,Map<String,Map<String,Collection<String>>>>();
+            }
             Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
 
             if( cloud == null ) {
@@ -275,20 +309,23 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
                 if( v4 != version.equals(IPVersion.IPV4) ) {
                     continue;
                 }
-                if( unassignedOnly && (vmAssignments.containsKey(ip) || lbAssignments.containsKey(ip)) ) {
+                
+                HashMap<String,String> vmAssignments = (HashMap<String, String>) mockObjectCacheManager.readObjectFromCache("vmAssignments");
+                HashMap<String,String> lbAssignments = (HashMap<String, String>) mockObjectCacheManager.readObjectFromCache("lbAssignments");
+                if( unassignedOnly && ((vmAssignments != null && vmAssignments.containsKey(ip)) 
+                		|| (lbAssignments != null && lbAssignments.containsKey(ip))) ) {
                     continue;
                 }
                 IpAddress address = new IpAddress();
-
                 address.setAddress(ip);
                 address.setAddressType(AddressType.PUBLIC);
                 address.setForVlan(false);
                 address.setIpAddressId(ip);
-                address.setProviderLoadBalancerId(lbAssignments.get(ip));
+                address.setProviderLoadBalancerId(lbAssignments == null? null : lbAssignments.get(ip));
                 address.setProviderNetworkInterfaceId(null);
                 //noinspection ConstantConditions
                 address.setRegionId(ctx.getRegionId());
-                address.setServerId(vmAssignments.get(ip));
+                address.setServerId(vmAssignments == null? null : vmAssignments.get(ip));
                 address.setVersion(version);
                 addresses.add(address);
             }
@@ -318,30 +355,43 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
-        synchronized( allocatedIps ) {
-            if( vmAssignments.containsKey(ip) || lbAssignments.containsKey(ip) ) {
+        synchronized(allocatedIpsLock) {
+        	HashMap<String,String> vmAssignments = (HashMap<String, String>) mockObjectCacheManager.readObjectFromCache("vmAssignments");
+            HashMap<String,String> lbAssignments = (HashMap<String, String>) mockObjectCacheManager.readObjectFromCache("lbAssignments");
+            if( (vmAssignments != null && vmAssignments.containsKey(ip)) || (lbAssignments != null && lbAssignments.containsKey(ip)) ) {
                 throw new CloudException("That IP is currently assigned to a resource");
             }
-            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
-
-            if( cloud == null ) {
-                cloud = new HashMap<String, Map<String, Collection<String>>>();
-                allocations.put(ctx.getCloud().getEndpoint(), cloud);
+            
+            HashMap<String,Map<String,Map<String,Collection<String>>>> allocations = 
+            		(HashMap<String, Map<String, Map<String, Collection<String>>>>) 
+            		mockObjectCacheManager.readObjectFromCache("allocations");
+            if (allocations != null) {
+	            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
+	
+	            if( cloud == null ) {
+	                cloud = new HashMap<String, Map<String, Collection<String>>>();
+	                allocations.put(ctx.getCloud().getEndpoint(), cloud);
+	            }
+	            Map<String,Collection<String>> region = cloud.get(ctx.getRegionId());
+	
+	            if( region == null ) {
+	                region = new HashMap<String, Collection<String>>();
+	                cloud.put(ctx.getRegionId(), region);
+	            }
+	            Collection<String> account = region.get(ctx.getEffectiveAccountNumber());
+	
+	            if( account == null ) {
+	                account = new TreeSet<String>();
+	                region.put(ctx.getEffectiveAccountNumber(), account);
+	            }
+	            account.remove(ip);
+	            mockObjectCacheManager.writeObjectToCache("allocations", allocations);
             }
-            Map<String,Collection<String>> region = cloud.get(ctx.getRegionId());
-
-            if( region == null ) {
-                region = new HashMap<String, Collection<String>>();
-                cloud.put(ctx.getRegionId(), region);
-            }
-            Collection<String> account = region.get(ctx.getEffectiveAccountNumber());
-
-            if( account == null ) {
-                account = new TreeSet<String>();
-                region.put(ctx.getEffectiveAccountNumber(), account);
-            }
-            account.remove(ip);
-            allocatedIps.remove(ip);
+            Set<String> allocatedIps = (Set<String>) mockObjectCacheManager.readObjectFromCache("allocatedIps");
+    		if (allocatedIps != null) {
+    			allocatedIps.remove(ip);
+    			mockObjectCacheManager.writeObjectToCache("allocatedIps", allocatedIps);
+    		}
         }
     }
 
@@ -352,32 +402,41 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
-        synchronized( allocatedIps ) {
+        synchronized(allocatedIpsLock) {
+        	HashMap<String,String> vmAssignments = (HashMap<String, String>) mockObjectCacheManager.readObjectFromCache("vmAssignments");
+        	if  (vmAssignments == null) {
+        		return;
+        	}
             if( !vmAssignments.containsKey(ip) ) {
                 throw new CloudException("That IP is not currently assigned to a resource");
             }
-            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
-
-            if( cloud == null ) {
-                cloud = new HashMap<String, Map<String, Collection<String>>>();
-                allocations.put(ctx.getCloud().getEndpoint(), cloud);
-            }
-            Map<String,Collection<String>> region = cloud.get(ctx.getRegionId());
-
-            if( region == null ) {
-                region = new HashMap<String, Collection<String>>();
-                cloud.put(ctx.getRegionId(), region);
-            }
-            Collection<String> account = region.get(ctx.getEffectiveAccountNumber());
-
-            if( account == null ) {
-                account = new TreeSet<String>();
-                region.put(ctx.getEffectiveAccountNumber(), account);
-            }
-            if( !account.contains(ip) ) {
-                throw new CloudException("Not your IP address");
+            HashMap<String,Map<String,Map<String,Collection<String>>>> allocations = 
+            		(HashMap<String, Map<String, Map<String, Collection<String>>>>) 
+            		mockObjectCacheManager.readObjectFromCache("allocations");
+            if (allocations != null) {
+	            Map<String,Map<String,Collection<String>>> cloud = allocations.get(ctx.getCloud().getEndpoint());
+	            if( cloud == null ) {
+	                cloud = new HashMap<String, Map<String, Collection<String>>>();
+	                allocations.put(ctx.getCloud().getEndpoint(), cloud);
+	            }
+	            Map<String,Collection<String>> region = cloud.get(ctx.getRegionId());
+	
+	            if( region == null ) {
+	                region = new HashMap<String, Collection<String>>();
+	                cloud.put(ctx.getRegionId(), region);
+	            }
+	            Collection<String> account = region.get(ctx.getEffectiveAccountNumber());
+	
+	            if( account == null ) {
+	                account = new TreeSet<String>();
+	                region.put(ctx.getEffectiveAccountNumber(), account);
+	            }
+	            if( !account.contains(ip) ) {
+	                throw new CloudException("Not your IP address");
+	            }
             }
             vmAssignments.remove(ip);
+            mockObjectCacheManager.writeObjectToCache("vmAssignments", vmAssignments);
         }
     }
 
