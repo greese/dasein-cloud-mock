@@ -67,8 +67,8 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud>
 					.readObjectFromCache(ctx.getCloud().getCloudName(),
 							ctx.getRegionId(), "allocatedIps");
 			if (allocatedIps == null) {
-				allocatedIps = new TreeSet<String>();
-			}
+                allocatedIps = new TreeSet<String>();
+            }
 			String ip;
 			do {
 				if (version.equals(IPVersion.IPV4)) {
@@ -137,8 +137,7 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud>
 			mockObjectCacheManager.writeObjectToCache(ctx.getCloud()
 					.getCloudName(), ctx.getRegionId(), "allocations",
 					allocations);
-			mockObjectCacheManager.writeObjectToCache(ctx.getCloud()
-					.getCloudName(), ctx.getRegionId(), "allocatedIps",
+            mockObjectCacheManager.writeObjectToCache(ctx.getCloud().getCloudName(), ctx.getRegionId(), "allocatedIps",
 					allocatedIps);
 			return ip;
 		}
@@ -446,8 +445,8 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud>
 					region.put(ctx.getEffectiveAccountNumber(), account);
 				}
 				account.remove(ip);
-				mockObjectCacheManager.writeObjectToCache(ctx.getCloud()
-						.getCloudName(), ctx.getRegionId(), "allocations",
+                mockObjectCacheManager
+                        .writeObjectToCache(ctx.getCloud().getCloudName(), ctx.getRegionId(), "allocations",
 						allocations);
 			}
 			Set<String> allocatedIps = (Set<String>) mockObjectCacheManager
@@ -509,7 +508,7 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud>
 				}
 			}
 			vmAssignments.remove(ip);
-			mockObjectCacheManager.writeObjectToCache("vmAssignments",
+            mockObjectCacheManager.writeObjectToCache("vmAssignments",
 					vmAssignments);
 		}
 	}

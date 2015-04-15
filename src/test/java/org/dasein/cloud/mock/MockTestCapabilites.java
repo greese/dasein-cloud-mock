@@ -22,11 +22,16 @@
 package org.dasein.cloud.mock;
 
 /**
- * Created by Jeffrey Yan on 3/23/2015.
+ * Created by Jeffrey Yan on 4/15/2015.
  *
  * @author Jeffrey Yan
  * @since 2015.05.1
  */
-public interface Configurable {
-    void configure(String content);
+public class MockTestCapabilites extends AbstractMockCapabilities {
+
+
+
+    public MockTestCapabilites() {
+        super(null);
+    }
 }

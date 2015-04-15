@@ -19,7 +19,6 @@
 package org.dasein.cloud.mock;
 
 import org.dasein.cloud.AbstractCloud;
-import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.ContextRequirements;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.compute.ComputeServices;
@@ -30,8 +29,6 @@ import org.dasein.cloud.network.NetworkServices;
 
 import javax.annotation.Nonnull;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 
 /**
  * Injectable Mock Cloud provider for unit testing.
@@ -42,19 +39,24 @@ import java.lang.reflect.InvocationTargetException;
  */
 public class MockCloud extends AbstractCloud {
 
-    private Configurator configurator;
+    private ConfigurationManager configurationManager;
     private MockCapabilitiesFactory capabilitiesFactory;
 
     public MockCloud() {
-        configurator = new Configurator(this);
-        capabilitiesFactory = new MockCapabilitiesFactory(this);
     }
 
-    public Configurator getConfigurator() {
-        return configurator;
+    public ConfigurationManager getConfigurationManager() {
+        if (configurationManager == null) {
+            configurationManager = new ConfigurationManager(
+                    (String) this.getContext().getConfigurationValue("configurationPath"));
+        }
+        return configurationManager;
     }
 
     public MockCapabilitiesFactory getCapabilitiesFactory() {
+        if (capabilitiesFactory == null) {
+            capabilitiesFactory = new MockCapabilitiesFactory(this);
+        }
         return capabilitiesFactory;
     }
 

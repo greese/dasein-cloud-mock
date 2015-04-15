@@ -23,10 +23,9 @@ package org.dasein.cloud.mock;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-import org.dasein.cloud.Capabilities;
 import org.dasein.cloud.InternalException;
 
 /**
@@ -41,7 +40,7 @@ public class MockCapabilitiesFactory {
 
     public MockCapabilitiesFactory(MockCloud mockCloud) {
         this.mockCloud = mockCloud;
-        capabilitieses = new HashMap<Class, AbstractMockCapabilities>();
+        capabilitieses = new ConcurrentHashMap<Class, AbstractMockCapabilities>();
     }
 
     public <T extends AbstractMockCapabilities> T getCapabilities(Class<T> capabilitiesClz) throws InternalException {
@@ -51,7 +50,7 @@ public class MockCapabilitiesFactory {
             try {
                 Constructor<T> constructor = capabilitiesClz.getConstructor(MockCloud.class);
                 capabilities = constructor.newInstance(mockCloud);
-                mockCloud.getConfigurator().configure("config:" + capabilitiesClz.getSimpleName(), capabilities, "capabilities/" + capabilitiesClz.getName() + ".yaml");
+                mockCloud.getConfigurationManager().configure("capabilities/" + capabilitiesClz.getName() + ".yaml", capabilities);
                 this.capabilitieses.put(capabilitiesClz, capabilities);
             } catch (InstantiationException instantiationException) {
                 throw new InternalException(instantiationException);

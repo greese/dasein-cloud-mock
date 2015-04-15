@@ -21,12 +21,25 @@
 
 package org.dasein.cloud.mock;
 
+import org.dasein.cloud.mock.compute.vm.MockVMCapabilities;
+import org.junit.Before;
+
 /**
- * Created by Jeffrey Yan on 3/23/2015.
+ * Created by Jeffrey Yan on 4/15/2015.
  *
  * @author Jeffrey Yan
  * @since 2015.05.1
  */
-public interface Configurable {
-    void configure(String content);
+public class MockCapabilitiesTests {
+
+    private ConfigurationManager configurationManager;
+    @Before
+    public void configure() {
+        configurationManager = new ConfigurationManager();
+    }
+
+    public void testLoadConfiguration() {
+        configurationManager.configure("", new MockVMCapabilities(null));
+    }
+
 }
