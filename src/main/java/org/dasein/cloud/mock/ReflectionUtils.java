@@ -21,9 +21,7 @@
 
 package org.dasein.cloud.mock;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
+import java.lang.reflect.*;
 import java.util.*;
 
 /**
@@ -33,7 +31,7 @@ import java.util.*;
  * @since 2015.05.1
  */
 public abstract class ReflectionUtils {
-    public static Boolean convertToBoolean(Object source) {
+    private static Boolean convertToBoolean(Object source) {
         if (source instanceof Boolean) {
             return (Boolean) source;
         } else {
@@ -41,21 +39,21 @@ public abstract class ReflectionUtils {
         }
     }
 
-    public static String convertToString(Object source) {
+    private static String convertToString(Object source) {
         if (source == null) {
             return "";
         }
         return source.toString();
     }
 
-    public static Enum convertToEnum(Object source, Class<Enum> targetClz) {
+    private static Enum convertToEnum(Object source, Class<Enum> targetClz) {
         if (source == null) {
             return null;
         }
         return Enum.valueOf(targetClz, source.toString());
     }
 
-    public static <T> T convertToSingleType(Object source, Class<T> targetClz) {
+    private static <T> T convertToSimpleType(Object source, Class<T> targetClz) {
         if (Boolean.class.isAssignableFrom(targetClz) || Boolean.TYPE.isAssignableFrom(targetClz)) {
             return (T) convertToBoolean(source);
         } else if (Enum.class.isAssignableFrom(targetClz)) {
@@ -71,26 +69,61 @@ public abstract class ReflectionUtils {
         }
     }
 
-    public static Iterable<Object> convertToList(Object source, Type type) {
+    private static <T> T convertToComplexType(Object source, Class<T> targetClz) {
+        if(source instanceof Map) {
+            try {
+                Constructor<T> constructor = null;
 
+                Constructor<?>[] constructors = targetClz.getDeclaredConstructors();
+                for (Constructor c : constructors) {
+                    if (c.getParameterTypes().length == 0) {
+                        constructor = c;
+                        break;
+                    }
+                }
+                if (constructor == null) {
+                    throw new IllegalArgumentException(targetClz + "has no default constructor");
+                }
+
+                constructor.setAccessible(true);
+                T result = constructor.newInstance(new Object[0]);
+
+                for (Map.Entry<String, ?> configEntry : ((Map<String, ?>)source).entrySet()) {
+                    Field field = getField(targetClz, configEntry.getKey());
+                    setField(result, field, configEntry.getValue());
+                }
+                return result;
+            } catch (InvocationTargetException invocationTargetException) {
+                throw new IllegalArgumentException(invocationTargetException);
+            } catch (InstantiationException instantiationException) {
+                throw new IllegalArgumentException("Not able to instantiate " + targetClz + " instance");
+            } catch (IllegalAccessException illegalAccessException) {
+                throw new IllegalArgumentException("Has no access to " + targetClz + " default constructor");
+            }
+        } else {
+            throw new IllegalArgumentException("Cannot convert " + source.getClass() + " to " + targetClz);
+        }
+    }
+
+    private static List<Object> convertToList(Object source, Type type) {
         List<Object> result = new ArrayList<Object>();
         if(source instanceof Iterable) {
             Iterator iterator = ((Iterable)source).iterator();
             while(iterator.hasNext()) {
-                result.add(convert(type, iterator.next()));
+                result.add(convert(iterator.next(), type));
             }
         } else {
-            result.add(convert(type, source));
+            result.add(convert(source, type));
         }
         return result;
     }
 
-    public static Map<Object, Object> convertToMap(Object obj, Type keyType, Type valType) {
+    private static Map<Object, Object> convertToMap(Object obj, Type keyType, Type valType) {
         Map<Object, Object> result = new LinkedHashMap<Object, Object>();
         if(obj instanceof Map) {
             Set<Map.Entry<Object, Object>> entries = ((Map) obj).entrySet();
             for (Map.Entry entry : entries) {
-                result.put(convert(keyType, entry.getKey()), convert(valType, entry.getValue()));
+                result.put(convert(entry.getKey(), keyType), convert(entry.getValue(), valType));
             }
         } else {
             throw new IllegalArgumentException("Cannot convert " + obj.getClass() + " to java.util.Map");
@@ -98,20 +131,17 @@ public abstract class ReflectionUtils {
         return result;
     }
 
-    public static Field getField(Class<?> targetClz, String name) {
-        try {
-            return targetClz.getDeclaredField(name);
-        } catch (NoSuchFieldException ignore) {
-            throw new IllegalArgumentException("No field " + name + " in class " + targetClz);
-        }
-    }
-
-    public static Object convert(Type type, Object value){
+    public static Object convert(Object value, Type type){
         Object result = null;
 
-        if(type instanceof Class)
-            result = convertToSingleType(value, (Class)type);
-        else if(type instanceof ParameterizedType){
+        if(type instanceof Class){
+            Class clz = (Class) type;
+            if (!Enum.class.isAssignableFrom(clz) && clz.getCanonicalName().contains("org.dasein.cloud")) {
+                result = convertToComplexType(value, clz);
+            } else {
+                result = convertToSimpleType(value, clz);
+            }
+        } else if(type instanceof ParameterizedType){
             ParameterizedType pType = (ParameterizedType) type;
             Class clz = (Class) pType.getRawType();
 
@@ -123,12 +153,23 @@ public abstract class ReflectionUtils {
                 Type valueType = pType.getActualTypeArguments()[1];
                 result = convertToMap(value, keyType, valueType);
             }
+        } else {
+            throw new IllegalArgumentException("Cannot convert " + value.getClass() + " to " + type);
         }
+
         return result;
     }
 
+    public static Field getField(Class<?> targetClz, String name) {
+        try {
+            return targetClz.getDeclaredField(name);
+        } catch (NoSuchFieldException ignore) {
+            throw new IllegalArgumentException("No field " + name + " in class " + targetClz);
+        }
+    }
+
     public static void setField(Object targetObj, Field targetField, Object value) {
-        Object result = convert(targetField.getGenericType(), value);
+        Object result = convert(value, targetField.getGenericType());
 
         targetField.setAccessible(true);
         try {

@@ -21,17 +21,18 @@
 
 package org.dasein.cloud.mock;
 
-import junit.framework.Assert;
 import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.compute.ImageClass;
 import org.dasein.cloud.compute.MachineImageFormat;
 import org.dasein.cloud.compute.VmState;
-import org.dasein.cloud.mock.compute.vm.MockVMCapabilities;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.List;
 import java.util.Map;
+
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertTrue;
 
 /**
  * Created by Jeffrey Yan on 4/15/2015.
@@ -54,26 +55,45 @@ public class MockCapabilitiesTests {
                 .configure("capabilities/" + "org.dasein.cloud.mock.MockCapabilitiesTests.MockTestCapabilities.yaml",
                         capabilities);
 
-        Assert.assertEquals(1, capabilities.enumBooleanMap.size());
-        Assert.assertTrue(capabilities.enumBooleanMap.get(VmState.PAUSED));
-        Assert.assertEquals(1, capabilities.enumStringMap.size());
-        Assert.assertEquals("machine image", capabilities.enumStringMap.get(ImageClass.MACHINE));
-        Assert.assertEquals(VisibleScope.ACCOUNT_GLOBAL, capabilities.enumSingle);
-        Assert.assertEquals(2, capabilities.enumList.size());
-        Assert.assertEquals(MachineImageFormat.AWS, capabilities.enumList.get(0));
-        Assert.assertTrue(capabilities.booleanSingle);
+        assertEquals(1, capabilities.enumBooleanMap.size());
+        assertTrue(capabilities.enumBooleanMap.get(VmState.PAUSED));
+        assertEquals(1, capabilities.enumStringMap.size());
+        assertEquals("machine image", capabilities.enumStringMap.get(ImageClass.MACHINE));
+        assertEquals(VisibleScope.ACCOUNT_GLOBAL, capabilities.enumValue);
+        assertEquals(2, capabilities.enumList.size());
+        assertEquals(MachineImageFormat.AWS, capabilities.enumList.get(0));
+        assertTrue(capabilities.booleanValue);
+
+        assertEquals(1, capabilities.hierarchyMap.size());
+        assertEquals(1, capabilities.hierarchyMap.get(VmState.PAUSED).size());
+        assertEquals(Boolean.TRUE, capabilities.hierarchyMap.get(VmState.PAUSED).get(ImageClass.MACHINE));
+        assertEquals(2, capabilities.hierarchyList.size());
+        assertEquals(Boolean.FALSE, capabilities.hierarchyList.get(1).get(ImageClass.RAMDISK));
+
+        assertEquals("This is a String", capabilities.innerCapabilities.stringValue);
+        assertEquals("stringValue", capabilities.innerCapabilities.stringStringMap.get("stringKey"));
     }
 
-    public class MockTestCapabilities extends AbstractMockCapabilities {
+    public static class MockTestCapabilities extends AbstractMockCapabilities {
 
         protected Map<VmState, Boolean> enumBooleanMap;
         protected Map<ImageClass, String> enumStringMap;
-        protected VisibleScope enumSingle;
+        protected VisibleScope enumValue;
         protected List<MachineImageFormat> enumList;
-        protected boolean booleanSingle;
+        protected boolean booleanValue;
+
+        protected Map<VmState, Map<ImageClass, Boolean>> hierarchyMap;
+        protected List<Map<ImageClass, Boolean>> hierarchyList;
+
+        protected MockTestInnerCapabilities innerCapabilities;
 
         public MockTestCapabilities() {
             super(null);
         }
+    }
+
+    public static class MockTestInnerCapabilities {
+        protected String stringValue;
+        protected Map<String, String> stringStringMap;
     }
 }

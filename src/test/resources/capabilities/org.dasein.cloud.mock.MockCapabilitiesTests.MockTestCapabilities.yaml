@@ -1,5 +1,8 @@
 - enumBooleanMap: {PAUSED: true}
 - enumStringMap: {MACHINE: machine image}
-- enumSingle: ACCOUNT_GLOBAL
+- enumValue: ACCOUNT_GLOBAL
 - enumList: [AWS,OVF]
-- booleanSingle: true
+- booleanValue: true
+- hierarchyMap: {PAUSED: {MACHINE: true}}
+- hierarchyList: [{MACHINE: true}, {RAMDISK: false}]
+- innerCapabilities: {stringValue: This is a String, stringStringMap: {stringKey: stringValue}}
