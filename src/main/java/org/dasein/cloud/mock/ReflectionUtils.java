@@ -107,6 +107,9 @@ public abstract class ReflectionUtils {
     }
 
     public static Object convert(Type type, Object value){
+        if(null == value)
+            return null;
+
         Object result = null;
 
         if(type instanceof Class)
