@@ -70,6 +70,10 @@ public abstract class ReflectionUtils {
     }
 
     private static <T> T convertToComplexType(Object source, Class<T> targetClz) {
+        if(source == null) {
+            return null;
+        }
+
         if(source instanceof Map) {
             try {
                 Constructor<T> constructor = null;

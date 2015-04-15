@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 
 import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertNull;
 import static junit.framework.Assert.assertTrue;
 
 /**
@@ -72,6 +73,7 @@ public class MockCapabilitiesTests {
 
         assertEquals("This is a String", capabilities.innerCapabilities.stringValue);
         assertEquals("stringValue", capabilities.innerCapabilities.stringStringMap.get("stringKey"));
+        assertNull(capabilities.innerCapabilities2);
     }
 
     public static class MockTestCapabilities extends AbstractMockCapabilities {
@@ -86,6 +88,8 @@ public class MockCapabilitiesTests {
         protected List<Map<ImageClass, Boolean>> hierarchyList;
 
         protected MockTestInnerCapabilities innerCapabilities;
+
+        protected MockTestInnerCapabilities innerCapabilities2;
 
         public MockTestCapabilities() {
             super(null);

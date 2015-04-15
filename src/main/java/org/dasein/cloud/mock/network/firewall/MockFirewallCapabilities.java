@@ -19,21 +19,34 @@ package org.dasein.cloud.mock.network.firewall;
 
 import org.dasein.cloud.*;
 import org.dasein.cloud.mock.MockCloud;
+import org.dasein.cloud.mock.AbstractMockCapabilities;
 import org.dasein.cloud.network.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * @author Colin Ke.
  * @since 2015.05.1
  */
-public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> implements FirewallCapabilities {
+public class MockFirewallCapabilities extends AbstractMockCapabilities implements FirewallCapabilities {
 
+    private String providerTermForFirewall;
+    private VisibleScope firewallVisibleScope;
+    private Map<Boolean, Requirement> precedenceRequirement;
+    private boolean isZeroPrecedenceHighest;
+    private Map<Boolean, Iterable<RuleTargetType>> supportedDestinationTypes;
+    private Map<Boolean, Iterable<Direction>> supportedDirections;
+    private Map<Boolean, Iterable<Permission>> supportedPermissions;
+    private Map<Boolean, Iterable<Protocol>> supportedProtocols;
+    private Map<Boolean, Iterable<RuleTargetType>> supportedSourceTypes;
+    private boolean requiresRulesOnCreation;
+    private Requirement requiresVLAN;
+    private Map<Boolean, Boolean> supportsFirewallCreation;
+    private boolean supportsFirewallDeletion;
 
     public MockFirewallCapabilities(@Nonnull MockCloud provider) {
         super(provider);
@@ -42,117 +55,115 @@ public class MockFirewallCapabilities extends AbstractCapabilities<MockCloud> im
     @Nonnull
     @Override
     public FirewallConstraints getFirewallConstraintsForCloud() throws InternalException, CloudException {
+        //TODO
         return FirewallConstraints.getInstance();
     }
 
     @Nonnull
     @Override
     public String getProviderTermForFirewall(@Nonnull Locale locale) {
-        return "firewall";
+        return providerTermForFirewall;
     }
 
     @Nullable
     @Override
     public VisibleScope getFirewallVisibleScope() {
-        return VisibleScope.ACCOUNT_GLOBAL;
+        return firewallVisibleScope;
     }
 
     @Nonnull
     @Override
     public Requirement identifyPrecedenceRequirement(boolean inVlan) throws InternalException, CloudException {
-        return Requirement.NONE;
+        if(null != precedenceRequirement)
+            return precedenceRequirement.get(inVlan);
+        return null;
     }
 
     @Override
     public boolean isZeroPrecedenceHighest() throws InternalException, CloudException {
-        return true;
+        return isZeroPrecedenceHighest;
     }
 
     @Nonnull
     @Override
     public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
-        if (inVlan) {
-            return Collections.emptyList();
-        }
-        return Collections.singletonList(RuleTargetType.GLOBAL);
+        if(null != supportedDestinationTypes)
+            return supportedDestinationTypes.get(inVlan);
+        return null;
     }
 
     @Nonnull
     @Override
     public Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException {
-        if (inVlan) {
-            return Collections.emptyList();
-        }
-        ArrayList<Direction> directions = new ArrayList<Direction>();
-
-        directions.add(Direction.INGRESS);
-        directions.add(Direction.EGRESS);
-        return directions;
+        if(null != supportedDirections)
+            return supportedDirections.get(inVlan);
+        return null;
     }
 
     @Nonnull
     @Override
     public Iterable<Permission> listSupportedPermissions(boolean inVlan) throws InternalException, CloudException {
-        if (inVlan) {
-            return Collections.emptyList();
-        }
-        return Collections.singletonList(Permission.ALLOW);
+        if(null != supportedPermissions)
+            return supportedPermissions.get(inVlan);
+        return null;
     }
 
     @Nonnull
     @Override
     public Iterable<Protocol> listSupportedProtocols(boolean inVlan) throws InternalException, CloudException {
+        if(null != supportedProtocols)
+            return supportedProtocols.get(inVlan);
         return null;
     }
 
     @Nonnull
     @Override
     public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException {
-        if (inVlan) {
-            return Collections.emptyList();
-        }
-        ArrayList<RuleTargetType> sources = new ArrayList<RuleTargetType>();
-
-        sources.add(RuleTargetType.CIDR);
-        sources.add(RuleTargetType.GLOBAL);
-        return sources;
+        if(null != supportedSourceTypes)
+            return supportedSourceTypes.get(inVlan);
+        return null;
     }
 
     @Override
     public boolean requiresRulesOnCreation() throws CloudException, InternalException {
-        return false;
+        return requiresRulesOnCreation;
     }
 
     @Nonnull
     @Override
     public Requirement requiresVLAN() throws CloudException, InternalException {
-        return Requirement.NONE;
+        return requiresVLAN;
     }
 
     @Override
     public boolean supportsRules(@Nonnull Direction direction, @Nonnull Permission permission, boolean inVlan) throws CloudException, InternalException {
+        //TODO
         return (!inVlan && permission.equals(Permission.ALLOW));
     }
 
     @Override
     public boolean supportsFirewallCreation(boolean inVlan) throws CloudException, InternalException {
-        return !inVlan;
+        if(null != supportsFirewallCreation)
+            return supportsFirewallCreation.get(inVlan);
+        return false;
     }
 
     @Override
     public boolean supportsFirewallDeletion() throws CloudException, InternalException {
-        return true;
+        return supportsFirewallDeletion;
     }
 
     @Override
     public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan, Direction direction)
             throws InternalException, CloudException {
+        //TODO
         return Collections.emptyList();
     }
 
     @Override
     public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan, Direction direction)
             throws InternalException, CloudException {
+        //TODO
         return Collections.emptyList();
     }
 }
