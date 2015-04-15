@@ -23,12 +23,8 @@ package org.dasein.cloud.mock;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.lang.reflect.Type;
+import java.util.*;
 
 /**
  * Created by Jeffrey Yan on 3/19/2015.
@@ -75,25 +71,26 @@ public abstract class ReflectionUtils {
         }
     }
 
-    public static <T> Iterable<T> convertToList(Object source, Class<T> targetElementClz) {
-        List<T> result = new ArrayList<T>();
+    public static Iterable<Object> convertToList(Object source, Type type) {
+
+        List<Object> result = new ArrayList<Object>();
         if(source instanceof Iterable) {
             Iterator iterator = ((Iterable)source).iterator();
             while(iterator.hasNext()) {
-                result.add(convertToSingleType(iterator.next(), targetElementClz));
+                result.add(convert(type, iterator.next()));
             }
         } else {
-            result.add(convertToSingleType(source, targetElementClz));
+            result.add(convert(type, source));
         }
         return result;
     }
 
-    public static <K, V> Map<K, V> convertToMap(Object obj, Class<K> targetKeyClz, Class<V> targetValueClz) {
-        Map<K, V> result = new LinkedHashMap<K, V>();
+    public static Map<Object, Object> convertToMap(Object obj, Type keyType, Type valType) {
+        Map<Object, Object> result = new LinkedHashMap<Object, Object>();
         if(obj instanceof Map) {
-            Set<Map.Entry<K, V>> entries = ((Map) obj).entrySet();
+            Set<Map.Entry<Object, Object>> entries = ((Map) obj).entrySet();
             for (Map.Entry entry : entries) {
-                result.put(convertToSingleType(entry.getKey(), targetKeyClz), convertToSingleType(entry.getValue(), targetValueClz));
+                result.put(convert(keyType, entry.getKey()), convert(valType, entry.getValue()));
             }
         } else {
             throw new IllegalArgumentException("Cannot convert " + obj.getClass() + " to java.util.Map");
@@ -109,22 +106,29 @@ public abstract class ReflectionUtils {
         }
     }
 
-    public static void setField(Object targetObj, Field targetField, Object value) {
-        Object result;
+    public static Object convert(Type type, Object value){
+        Object result = null;
 
-        Class<?> fieldClz = targetField.getType();
-        if(fieldClz.isAssignableFrom(List.class)) { //Map is not Iterable
-            ParameterizedType parameterizedType = (ParameterizedType) targetField.getGenericType();
-            Class<?> element = (Class<?>) parameterizedType.getActualTypeArguments()[0];
-            result = convertToList(value, element);
-        } else if(fieldClz.isAssignableFrom(Map.class)) {
-            ParameterizedType parameterizedType = (ParameterizedType) targetField.getGenericType();
-            Class<?> keyType = (Class<?>) parameterizedType.getActualTypeArguments()[0];
-            Class<?> valueType = (Class<?>) parameterizedType.getActualTypeArguments()[1];
-            result = convertToMap(value, keyType, valueType);
-        } else {
-            result = convertToSingleType(value, fieldClz);
+        if(type instanceof Class)
+            result = convertToSingleType(value, (Class)type);
+        else if(type instanceof ParameterizedType){
+            ParameterizedType pType = (ParameterizedType) type;
+            Class clz = (Class) pType.getRawType();
+
+            if(clz.isAssignableFrom(List.class)) { //Map is not Iterable
+                Type elementType = pType.getActualTypeArguments()[0];
+                result = convertToList(value, elementType);
+            } else if(clz.isAssignableFrom(Map.class)) {
+                Type keyType = pType.getActualTypeArguments()[0];
+                Type valueType = pType.getActualTypeArguments()[1];
+                result = convertToMap(value, keyType, valueType);
+            }
         }
+        return result;
+    }
+
+    public static void setField(Object targetObj, Field targetField, Object value) {
+        Object result = convert(targetField.getGenericType(), value);
 
         targetField.setAccessible(true);
         try {
