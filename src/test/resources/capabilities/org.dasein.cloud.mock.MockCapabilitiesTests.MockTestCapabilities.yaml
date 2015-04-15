@@ -1,0 +1,5 @@
+- enumBooleanMap: {PAUSED: true}
+- enumStringMap: {MACHINE: machine image}
+- enumSingle: ACCOUNT_GLOBAL
+- enumList: [AWS,OVF]
+- booleanSingle: true
