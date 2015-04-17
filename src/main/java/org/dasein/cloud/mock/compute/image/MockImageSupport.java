@@ -393,7 +393,7 @@ public class MockImageSupport extends AbstractImageSupport<MockCloud> implements
     @Override
     public @Nonnull Iterable<MachineImage> searchPublicImages(@Nonnull ImageFilterOptions options)
             throws CloudException, InternalException {
-        return listImages(options.withAccountNumber("--cloud--"));
+        return listImages(options.withAccountNumber("--cloud--").matchingAll());
     }
 
     @Override

@@ -28,5 +28,5 @@ package org.dasein.cloud.mock;
  * @since 2015.05.1
  */
 public interface Configurable {
-    public void configure(String content);
+    void configure(String content);
 }

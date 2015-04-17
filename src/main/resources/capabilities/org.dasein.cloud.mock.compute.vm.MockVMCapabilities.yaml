@@ -9,18 +9,6 @@
 - canTerminate: {}
 - canUnpause: {PAUSED: true}
 
-- defaultCanAlter: false
-- defaultCanClone: false
-- defaultCanPause: true
-- defaultCanReboot: true
-- defaultCanResume: true
-- defaultCanStart: true
-- defaultCanStop: true
-- defaultCanSuspend: true
-- defaultCanTerminate: true
-- defaultCanUnpause: false
-
-
 - maximumVirtualMachineCount: 100
 - costFactor: 100
 - providerTermForVirtualMachine: "mock virtual machine"
@@ -28,19 +16,12 @@
 - virtualMachineNamingConstraints:
 - virtualMachineVisibleScope:
 - virtualMachineProductVisibleScope:
+
 - dataCenterLaunchRequirement:
-
 - imageRequirement: {MACHINE: REQUIRED}
-- defaultImageRequirement: NONE
-
 - passwordRequirement: {WINDOWS: REQUIRED}
-- defaultPasswordRequirement: OPTIONAL
-
 - rootVolumeRequirement: NONE
-
 - shellKeyRequirement: {WINDOWS: NONE}
-- defaultShellKeyRequirement: OPTIONAL
-
 - staticIPRequirement: NONE
 - subnetRequirement:
 

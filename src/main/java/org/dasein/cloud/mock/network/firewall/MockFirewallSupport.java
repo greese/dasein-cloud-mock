@@ -111,7 +111,6 @@ public class MockFirewallSupport extends AbstractFirewallSupport<MockCloud> impl
 
     public MockFirewallSupport(MockCloud provider) {
         super(provider);
-        capabilities = new MockFirewallCapabilities(provider);
     }
 
 
@@ -272,12 +271,10 @@ public class MockFirewallSupport extends AbstractFirewallSupport<MockCloud> impl
         }
     }
 
-    FirewallCapabilities capabilities;
-
     @Nonnull
     @Override
     public FirewallCapabilities getCapabilities() throws CloudException, InternalException {
-        return capabilities;
+        return getProvider().getCapabilitiesFactory().getCapabilities(MockFirewallCapabilities.class);
     }
 
     @Override

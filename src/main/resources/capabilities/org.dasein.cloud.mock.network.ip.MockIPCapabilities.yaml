@@ -1,0 +1,10 @@
+- providerTermForIpAddress: "IP Address"
+- vlanForVlanIPRequirement: NONE
+- vlanForIPRequirement: NONE
+- isAssigned: true
+- canBeAssigned: true
+- isAssignablePostLaunch: true
+- isForwarding: false
+- isRequestable: true
+- supportedIPVersions: [IPV4, IPV6]
+- supportsVLANAddresses: false

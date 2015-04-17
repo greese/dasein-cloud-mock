@@ -19,7 +19,6 @@
 package org.dasein.cloud.mock;
 
 import org.dasein.cloud.AbstractCloud;
-import org.dasein.cloud.CloudProvider;
 import org.dasein.cloud.ContextRequirements;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.compute.ComputeServices;
@@ -30,8 +29,6 @@ import org.dasein.cloud.network.NetworkServices;
 
 import javax.annotation.Nonnull;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 
 /**
  * Injectable Mock Cloud provider for unit testing.
@@ -42,19 +39,24 @@ import java.lang.reflect.InvocationTargetException;
  */
 public class MockCloud extends AbstractCloud {
 
-    private Configurator configurator;
+    private ConfigurationManager configurationManager;
     private MockCapabilitiesFactory capabilitiesFactory;
 
     public MockCloud() {
-        configurator = new Configurator(this);
-        capabilitiesFactory = new MockCapabilitiesFactory(this);
     }
 
-    public Configurator getConfigurator() {
-        return configurator;
+    public ConfigurationManager getConfigurationManager() {
+        if (configurationManager == null) {
+            configurationManager = new ConfigurationManager(
+                    (String) this.getContext().getConfigurationValue("configurationPath"));
+        }
+        return configurationManager;
     }
 
     public MockCapabilitiesFactory getCapabilitiesFactory() {
+        if (capabilitiesFactory == null) {
+            capabilitiesFactory = new MockCapabilitiesFactory(this);
+        }
         return capabilitiesFactory;
     }
 
@@ -103,21 +105,16 @@ public class MockCloud extends AbstractCloud {
         if( ctx == null ) {
             return null;
         }
-        try {
-            String access = new String(ctx.getAccessPublic(), "utf-8");
-            String secret = new String(ctx.getAccessPrivate(), "utf-8");
+        byte[][] apiKey = (byte[][]) ctx.getConfigurationValue(new ContextRequirements.Field("apiKey", ContextRequirements.FieldType.KEYPAIR));
+        String apiKeyShared = new String(apiKey[0]);
+        String apiKeySecret = new String(apiKey[1]);
 
-            if( !access.equals("6789") ) {
-                return null;
-            }
-            if( !secret.equals("abcdefghijkl") ) {
-                return null;
-            }
-            return "12345";
-        }
-        catch( UnsupportedEncodingException e ) {
-            e.printStackTrace();
+        if (!apiKeyShared.equals("6789")) {
             return null;
         }
+        if (!apiKeySecret.equals("abcdefghijkl")) {
+            return null;
+        }
+        return "12345";
     }
 }

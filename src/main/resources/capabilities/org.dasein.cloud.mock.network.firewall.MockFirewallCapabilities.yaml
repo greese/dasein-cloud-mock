@@ -1,0 +1,13 @@
+- providerTermForFirewall: "firewall"
+- firewallVisibleScope: ACCOUNT_GLOBAL
+- precedenceRequirement: {true: NONE, false: NONE}
+- isZeroPrecedenceHighest: true
+- supportedDestinationTypes: {true: [], false: [GLOBAL]}
+- supportedDirections: {true: [], false: [INGRESS, EGRESS]}
+- supportedPermissions: {true: [], false: [ALLOW]}
+- supportedProtocols:
+- supportedSourceTypes: {true: [], false: [CIDR, GLOBAL]}
+- requiresRulesOnCreation: false
+- requiresVLAN: NONE
+- supportsFirewallCreation: {true: false, false: true}
+- supportsFirewallDeletion: true

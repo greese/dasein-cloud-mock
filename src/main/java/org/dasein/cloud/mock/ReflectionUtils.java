@@ -21,14 +21,8 @@
 
 package org.dasein.cloud.mock;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.lang.reflect.*;
+import java.util.*;
 
 /**
  * Created by Jeffrey Yan on 3/19/2015.
@@ -37,7 +31,7 @@ import java.util.Set;
  * @since 2015.05.1
  */
 public abstract class ReflectionUtils {
-    public static Boolean convertToBoolean(Object source) {
+    private static Boolean convertToBoolean(Object source) {
         if (source instanceof Boolean) {
             return (Boolean) source;
         } else {
@@ -45,21 +39,21 @@ public abstract class ReflectionUtils {
         }
     }
 
-    public static String convertToString(Object source) {
+    private static String convertToString(Object source) {
         if (source == null) {
             return "";
         }
         return source.toString();
     }
 
-    public static Enum convertToEnum(Object source, Class<Enum> targetClz) {
+    private static Enum convertToEnum(Object source, Class<Enum> targetClz) {
         if (source == null) {
             return null;
         }
         return Enum.valueOf(targetClz, source.toString());
     }
 
-    public static <T> T convertToSingleType(Object source, Class<T> targetClz) {
+    private static <T> T convertToSimpleType(Object source, Class<T> targetClz) {
         if (Boolean.class.isAssignableFrom(targetClz) || Boolean.TYPE.isAssignableFrom(targetClz)) {
             return (T) convertToBoolean(source);
         } else if (Enum.class.isAssignableFrom(targetClz)) {
@@ -75,29 +69,98 @@ public abstract class ReflectionUtils {
         }
     }
 
-    public static <T> Iterable<T> convertToList(Object source, Class<T> targetElementClz) {
-        List<T> result = new ArrayList<T>();
+    private static <T> T convertToComplexType(Object source, Class<T> targetClz) {
+        if(source == null) {
+            return null;
+        }
+
+        if(source instanceof Map) {
+            try {
+                Constructor<T> constructor = null;
+
+                Constructor<?>[] constructors = targetClz.getDeclaredConstructors();
+                for (Constructor c : constructors) {
+                    if (c.getParameterTypes().length == 0) {
+                        constructor = c;
+                        break;
+                    }
+                }
+                if (constructor == null) {
+                    throw new IllegalArgumentException(targetClz + "has no default constructor");
+                }
+
+                constructor.setAccessible(true);
+                T result = constructor.newInstance(new Object[0]);
+
+                for (Map.Entry<String, ?> configEntry : ((Map<String, ?>)source).entrySet()) {
+                    Field field = getField(targetClz, configEntry.getKey());
+                    setField(result, field, configEntry.getValue());
+                }
+                return result;
+            } catch (InvocationTargetException invocationTargetException) {
+                throw new IllegalArgumentException(invocationTargetException);
+            } catch (InstantiationException instantiationException) {
+                throw new IllegalArgumentException("Not able to instantiate " + targetClz + " instance");
+            } catch (IllegalAccessException illegalAccessException) {
+                throw new IllegalArgumentException("Has no access to " + targetClz + " default constructor");
+            }
+        } else {
+            throw new IllegalArgumentException("Cannot convert " + source.getClass() + " to " + targetClz);
+        }
+    }
+
+    private static List<Object> convertToList(Object source, Type type) {
+        List<Object> result = new ArrayList<Object>();
         if(source instanceof Iterable) {
             Iterator iterator = ((Iterable)source).iterator();
             while(iterator.hasNext()) {
-                result.add(convertToSingleType(iterator.next(), targetElementClz));
+                result.add(convert(iterator.next(), type));
             }
         } else {
-            result.add(convertToSingleType(source, targetElementClz));
+            result.add(convert(source, type));
         }
         return result;
     }
 
-    public static <K, V> Map<K, V> convertToMap(Object obj, Class<K> targetKeyClz, Class<V> targetValueClz) {
-        Map<K, V> result = new LinkedHashMap<K, V>();
+    private static Map<Object, Object> convertToMap(Object obj, Type keyType, Type valType) {
+        Map<Object, Object> result = new LinkedHashMap<Object, Object>();
         if(obj instanceof Map) {
-            Set<Map.Entry<K, V>> entries = ((Map) obj).entrySet();
+            Set<Map.Entry<Object, Object>> entries = ((Map) obj).entrySet();
             for (Map.Entry entry : entries) {
-                result.put(convertToSingleType(entry.getKey(), targetKeyClz), convertToSingleType(entry.getValue(), targetValueClz));
+                result.put(convert(entry.getKey(), keyType), convert(entry.getValue(), valType));
             }
-        } else {
+        } else if (obj != null) {
             throw new IllegalArgumentException("Cannot convert " + obj.getClass() + " to java.util.Map");
         }
+        return result;
+    }
+
+    public static Object convert(Object value, Type type){
+        Object result = null;
+
+        if(type instanceof Class){
+            Class clz = (Class) type;
+            if (!Enum.class.isAssignableFrom(clz) && clz.getCanonicalName().contains("org.dasein.cloud")) {
+                result = convertToComplexType(value, clz);
+            } else {
+                result = convertToSimpleType(value, clz);
+            }
+        } else if(type instanceof ParameterizedType){
+            ParameterizedType pType = (ParameterizedType) type;
+            Class clz = (Class) pType.getRawType();
+
+            if(clz.isAssignableFrom(List.class)) { //Map is not Iterable
+                Type elementType = pType.getActualTypeArguments()[0];
+                result = convertToList(value, elementType);
+            } else if(clz.isAssignableFrom(Map.class)) {
+                Type keyType = pType.getActualTypeArguments()[0];
+                Type valueType = pType.getActualTypeArguments()[1];
+                result = convertToMap(value, keyType, valueType);
+            }
+        } else {
+            throw new IllegalArgumentException("Cannot convert " + value.getClass() + " to " + type);
+        }
+
         return result;
     }
 
@@ -110,21 +173,7 @@ public abstract class ReflectionUtils {
     }
 
     public static void setField(Object targetObj, Field targetField, Object value) {
-        Object result;
-
-        Class<?> fieldClz = targetField.getType();
-        if(fieldClz.isAssignableFrom(List.class)) { //Map is not Iterable
-            ParameterizedType parameterizedType = (ParameterizedType) targetField.getGenericType();
-            Class<?> element = (Class<?>) parameterizedType.getActualTypeArguments()[0];
-            result = convertToList(value, element);
-        } else if(fieldClz.isAssignableFrom(Map.class)) {
-            ParameterizedType parameterizedType = (ParameterizedType) targetField.getGenericType();
-            Class<?> keyType = (Class<?>) parameterizedType.getActualTypeArguments()[0];
-            Class<?> valueType = (Class<?>) parameterizedType.getActualTypeArguments()[1];
-            result = convertToMap(value, keyType, valueType);
-        } else {
-            result = convertToSingleType(value, fieldClz);
-        }
+        Object result = convert(value, targetField.getGenericType());
 
         targetField.setAccessible(true);
         try {
