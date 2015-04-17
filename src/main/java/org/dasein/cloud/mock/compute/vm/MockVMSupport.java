@@ -266,7 +266,7 @@ public class MockVMSupport extends AbstractVMSupport<MockCloud> implements Virtu
     @Nonnull
     @Override
     public VirtualMachineCapabilities getCapabilities() throws InternalException, CloudException {
-        return new MockVMCapabilities(getProvider());
+        return getProvider().getCapabilitiesFactory().getCapabilities(MockVMCapabilities.class);
     }
 
     @Override

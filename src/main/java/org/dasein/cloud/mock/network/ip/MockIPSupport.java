@@ -421,6 +421,6 @@ public class MockIPSupport extends AbstractIpAddressSupport<MockCloud> implement
     @Nonnull
     @Override
     public IPAddressCapabilities getCapabilities() throws CloudException, InternalException {
-    	return new MockIPCapabilities(getProvider());
+        return getProvider().getCapabilitiesFactory().getCapabilities(MockIPCapabilities.class);
     }
 }

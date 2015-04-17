@@ -37,25 +37,15 @@ import java.util.Map;
  */
 public class MockVMCapabilities extends AbstractMockCapabilities implements VirtualMachineCapabilities {
 
-    private boolean defaultCanClone;
     private Map<VmState, Boolean> canClone;
-    private boolean defaultCanAlter;
     private Map<VmState, Boolean> canAlter;
-    private boolean defaultCanPause;
     private Map<VmState, Boolean> canPause;
-    private boolean defaultCanReboot;
     private Map<VmState, Boolean> canReboot;
-    private boolean defaultCanResume;
     private Map<VmState, Boolean> canResume;
-    private boolean defaultCanStart;
     private Map<VmState, Boolean> canStart;
-    private boolean defaultCanStop;
     private Map<VmState, Boolean> canStop;
-    private boolean defaultCanSuspend;
     private Map<VmState, Boolean> canSuspend;
-    private boolean defaultCanTerminate;
     private Map<VmState, Boolean> canTerminate;
-    private boolean defaultCanUnpause;
     private Map<VmState, Boolean> canUnpause;
 
     private int costFactor;
@@ -67,12 +57,9 @@ public class MockVMCapabilities extends AbstractMockCapabilities implements Virt
     private VisibleScope virtualMachineVisibleScope;
     private VisibleScope virtualMachineProductVisibleScope;
     private Requirement dataCenterLaunchRequirement;
-    private Requirement defaultImageRequirement;
     private Map<ImageClass, Requirement> imageRequirement;
-    private Requirement defaultPasswordRequirement;
     private Map<Platform, Requirement> passwordRequirement;
     private Requirement rootVolumeRequirement;
-    private Requirement defaultShellKeyRequirement;
     private Map<Platform, Requirement> shellKeyRequirement;
     private Requirement staticIPRequirement;
     private Requirement subnetRequirement;
@@ -109,7 +96,7 @@ public class MockVMCapabilities extends AbstractMockCapabilities implements Virt
     public boolean canAlter(@Nonnull VmState fromState) throws CloudException, InternalException {
         if(canAlter.containsKey(fromState))
             return canAlter.get(fromState);
-        return defaultCanAlter;
+        return false;
 
     }
 
@@ -117,42 +104,42 @@ public class MockVMCapabilities extends AbstractMockCapabilities implements Virt
     public boolean canClone(@Nonnull VmState fromState) throws CloudException, InternalException {
         if(canClone.containsKey(fromState))
             return canClone.get(fromState);
-        return defaultCanClone;
+        return false;
     }
 
     @Override
     public boolean canPause(@Nonnull VmState fromState) throws CloudException, InternalException {
         if(canPause.containsKey(fromState))
             return canPause.get(fromState);
-        return defaultCanPause;
+        return true;
     }
 
     @Override
     public boolean canReboot(@Nonnull VmState fromState) throws CloudException, InternalException {
         if(canReboot.containsKey(fromState))
             return canReboot.get(fromState);
-        return defaultCanReboot;
+        return true;
     }
 
     @Override
     public boolean canResume(@Nonnull VmState fromState) throws CloudException, InternalException {
         if(canResume.containsKey(fromState))
             return canResume.get(fromState);
-        return defaultCanResume;
+        return true;
     }
 
     @Override
     public boolean canStart(@Nonnull VmState fromState) throws CloudException, InternalException {
         if(canStart.containsKey(fromState))
             return canStart.get(fromState);
-        return defaultCanStart;
+        return true;
     }
 
     @Override
     public boolean canStop(@Nonnull VmState fromState) throws CloudException, InternalException {
         if(canStop.containsKey(fromState))
             return canStop.get(fromState);
-        return defaultCanStop;
+        return true;
 
     }
 
@@ -160,21 +147,21 @@ public class MockVMCapabilities extends AbstractMockCapabilities implements Virt
     public boolean canSuspend(@Nonnull VmState fromState) throws CloudException, InternalException {
         if(canSuspend.containsKey(fromState))
             return canSuspend.get(fromState);
-        return defaultCanSuspend;
+        return true;
     }
 
     @Override
     public boolean canTerminate(@Nonnull VmState fromState) throws CloudException, InternalException {
         if(canTerminate.containsKey(fromState))
             return canTerminate.get(fromState);
-        return defaultCanTerminate;
+        return true;
     }
 
     @Override
 	public boolean canUnpause(@Nonnull VmState fromState) throws CloudException, InternalException {
         if(canUnpause.containsKey(fromState))
             return canUnpause.get(fromState);
-        return defaultCanUnpause;
+        return false;
 	}
 
     @Override
@@ -228,7 +215,7 @@ public class MockVMCapabilities extends AbstractMockCapabilities implements Virt
     public Requirement identifyImageRequirement(@Nonnull ImageClass cls) throws CloudException, InternalException {
         if(imageRequirement.containsKey(cls))
             return imageRequirement.get(cls);
-        return defaultImageRequirement;
+        return Requirement.NONE;
     }
 
     @Nonnull
@@ -236,7 +223,7 @@ public class MockVMCapabilities extends AbstractMockCapabilities implements Virt
     public Requirement identifyPasswordRequirement(Platform platform) throws CloudException, InternalException {
         if(passwordRequirement.containsKey(platform))
             return passwordRequirement.get(platform);
-        return defaultPasswordRequirement;
+        return Requirement.OPTIONAL;
     }
 
     @Nonnull
@@ -250,7 +237,7 @@ public class MockVMCapabilities extends AbstractMockCapabilities implements Virt
     public Requirement identifyShellKeyRequirement(Platform platform) throws CloudException, InternalException {
         if(shellKeyRequirement.containsKey(platform))
             return shellKeyRequirement.get(platform);
-        return defaultShellKeyRequirement;
+        return Requirement.OPTIONAL;
     }
 
     @Nonnull
