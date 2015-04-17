@@ -105,21 +105,16 @@ public class MockCloud extends AbstractCloud {
         if( ctx == null ) {
             return null;
         }
-        try {
-            String access = new String(ctx.getAccessPublic(), "utf-8");
-            String secret = new String(ctx.getAccessPrivate(), "utf-8");
+        byte[][] apiKey = (byte[][]) ctx.getConfigurationValue(new ContextRequirements.Field("apiKey", ContextRequirements.FieldType.KEYPAIR));
+        String apiKeyShared = new String(apiKey[0]);
+        String apiKeySecret = new String(apiKey[1]);
 
-            if( !access.equals("6789") ) {
-                return null;
-            }
-            if( !secret.equals("abcdefghijkl") ) {
-                return null;
-            }
-            return "12345";
-        }
-        catch( UnsupportedEncodingException e ) {
-            e.printStackTrace();
+        if (!apiKeyShared.equals("6789")) {
             return null;
         }
+        if (!apiKeySecret.equals("abcdefghijkl")) {
+            return null;
+        }
+        return "12345";
     }
 }

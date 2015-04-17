@@ -129,7 +129,7 @@ public abstract class ReflectionUtils {
             for (Map.Entry entry : entries) {
                 result.put(convert(entry.getKey(), keyType), convert(entry.getValue(), valType));
             }
-        } else {
+        } else if (obj != null) {
             throw new IllegalArgumentException("Cannot convert " + obj.getClass() + " to java.util.Map");
         }
         return result;
